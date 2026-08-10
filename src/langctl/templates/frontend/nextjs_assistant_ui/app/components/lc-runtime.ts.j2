@@ -1,0 +1,151 @@
+/**
+ * Bridge between LangChain's `useStream` and assistant-ui's runtime.
+ *
+ * assistant-ui is headless and state-driven: it wants `ThreadMessageLike[]`,
+ * while `useStream` gives us LangChain `BaseMessage[]`. This file is the only
+ * glue between them, and the only part of the UI stack that has to change when
+ * either side changes shape.
+ *
+ * Kept as plain functions (no React) so it can be unit-tested directly.
+ */
+
+import type { BaseMessage } from "@langchain/core/messages";
+import type { ThreadMessageLike } from "@assistant-ui/react";
+
+/**
+ * Content part types derived from `ThreadMessageLike` rather than written out.
+ *
+ * `content` is `string | readonly Part[]`, so it has to be narrowed before it
+ * can be indexed or mapped. Deriving these keeps the converter correct when
+ * assistant-ui adds new part kinds, instead of pinning a list that silently
+ * goes stale.
+ */
+type ContentParts = Exclude<ThreadMessageLike["content"], string>;
+type ContentPart = ContentParts[number];
+type ToolCallPart = Extract<ContentPart, { type: "tool-call" }>;
+
+/**
+ * Normalise LangChain message content into plain text.
+ *
+ * Content is a string for simple replies, but an array of typed parts for
+ * multimodal or tool-using models, so the array case is the normal case, not
+ * an edge case.
+ */
+export function contentToText(content: unknown): string {
+  if (typeof content === "string") return content;
+  if (!Array.isArray(content)) return "";
+  return content
+    .map((part) => {
+      if (typeof part === "string") return part;
+      if (part && typeof part === "object" && "text" in part) {
+        return String((part as { text: unknown }).text ?? "");
+      }
+      return "";
+    })
+    .join("");
+}
+
+type ToolCallLike = { id?: string; name: string; args?: unknown };
+
+function toolCallsOf(message: BaseMessage): ToolCallLike[] {
+  const calls = (message as { tool_calls?: ToolCallLike[] }).tool_calls;
+  return Array.isArray(calls) ? calls : [];
+}
+
+/**
+ * Stable id for a message.
+ *
+ * assistant-ui keys branching and edit state off message identity. Partial
+ * messages streamed mid-run can arrive without an `id`, so falling back to the
+ * array index keeps keys stable *within* a render pass rather than generating a
+ * fresh id each time, which would remount the message on every token.
+ */
+function messageId(message: BaseMessage, index: number): string {
+  return message.id ?? `lc-${index}`;
+}
+
+/** Convert one LangChain message into assistant-ui's shape. */
+export function toThreadMessage(message: BaseMessage, index: number): ThreadMessageLike | null {
+  const type = message.getType();
+  const id = messageId(message, index);
+
+  if (type === "human") {
+    return { id, role: "user", content: [{ type: "text", text: contentToText(message.content) }] };
+  }
+
+  if (type === "system") {
+    // System prompts are configuration, not conversation; showing them would
+    // leak the prompt into the transcript.
+    return null;
+  }
+
+  if (type === "tool") {
+    // Tool results are attached to their originating call below, not rendered
+    // as standalone messages.
+    return null;
+  }
+
+  if (type === "ai") {
+    const parts: ContentPart[] = [];
+    const text = contentToText(message.content);
+    if (text) parts.push({ type: "text", text });
+
+    for (const call of toolCallsOf(message)) {
+      parts.push({
+        type: "tool-call",
+        toolCallId: call.id ?? `${id}-${call.name}`,
+        toolName: call.name,
+        // Tool args are JSON by construction; the cast is to assistant-ui's own
+        // JSON type rather than a hand-written one.
+        args: (call.args ?? {}) as ToolCallPart["args"],
+      });
+    }
+
+    // An assistant turn that is still streaming may have neither text nor tool
+    // calls yet. Emitting an empty text part keeps the bubble on screen instead
+    // of making it flicker in and out as tokens arrive.
+    if (parts.length === 0) parts.push({ type: "text", text: "" });
+
+    return { id, role: "assistant", content: parts };
+  }
+
+  return null;
+}
+
+/** Convert a full LangChain transcript, attaching tool results to their calls. */
+export function toThreadMessages(messages: BaseMessage[]): ThreadMessageLike[] {
+  const results = new Map<string, string>();
+  for (const message of messages) {
+    if (message.getType() === "tool") {
+      const callId = (message as { tool_call_id?: string }).tool_call_id;
+      if (callId) results.set(callId, contentToText(message.content));
+    }
+  }
+
+  const converted: ThreadMessageLike[] = [];
+  messages.forEach((message, index) => {
+    const threadMessage = toThreadMessage(message, index);
+    if (!threadMessage) return;
+
+    // `content` is `string | readonly Part[]`; only the array form can carry
+    // tool calls, so the string form passes through untouched.
+    if (typeof threadMessage.content === "string") {
+      converted.push(threadMessage);
+      return;
+    }
+
+    const content: ContentPart[] = threadMessage.content.map((part) => {
+      // toolCallId is optional in assistant-ui's type; without one there is no
+      // way to match a result to this call.
+      if (typeof part === "object" && part.type === "tool-call" && part.toolCallId) {
+        const result = results.get(part.toolCallId);
+        return result === undefined ? part : { ...part, result };
+      }
+      return part;
+    });
+
+    converted.push({ ...threadMessage, content });
+  });
+
+  return converted;
+}

@@ -13,10 +13,33 @@ from rich.panel import Panel
 from rich.prompt import Confirm, Prompt
 
 from ..core.errors import LangctlError
+from ..core.node_cli import add_ai_elements
 from ..core.scaffold import scaffold
 from ..core.spec import AgentSpec
 
 console = Console()
+
+#: Chat UIs selectable with --ui.
+UI_CHOICES = {
+    "assistant-ui": "nextjs_assistant_ui",
+    "minimal": "nextjs_minimal",
+    "ai-elements": "nextjs_ai_elements",
+}
+
+#: Offered in the interactive wizard. `ai-elements` is deliberately excluded:
+#: its generated components currently fail `next build` because `streamdown`
+#: and `@streamdown/code` resolve two incompatible copies of `shiki`, and npm
+#: overrides do not dedupe them. It stays reachable via an explicit
+#: `--ui ai-elements` for anyone who wants to track the fix upstream.
+WIZARD_UI_CHOICES = ["assistant-ui", "minimal"]
+
+EXPERIMENTAL_UIS = {
+    "ai-elements": (
+        "AI Elements components currently fail type checking (upstream shiki "
+        "version conflict in streamdown), so `npm run build` will fail until it "
+        "is fixed upstream."
+    ),
+}
 
 MODEL_DEFAULTS = {
     "anthropic": "claude-opus-5",
@@ -54,6 +77,29 @@ def _install(dest: Path, spec: AgentSpec) -> None:
         if result.returncode != 0:
             console.print(f"[yellow]![/yellow] {pm} install failed; run it yourself in web/")
             console.print(f"[dim]{result.stderr.strip()[:400]}[/dim]")
+            return
+
+        _add_ui_components(spec, web)
+
+
+def _add_ui_components(spec: AgentSpec, web: Path) -> None:
+    """Fetch registry-distributed UI components, if this template needs them.
+
+    AI Elements ships source files through a CLI rather than npm. The call is
+    best-effort by design: offline, proxied, or air-gapped environments still get
+    a complete project, and we print the one command that finishes it.
+    """
+    if spec.frontend.kind != "nextjs_ai_elements":
+        return
+
+    console.print("[dim]adding AI Elements components…[/dim]")
+    result = add_ai_elements(web)
+    if result.ok:
+        console.print("[green]✓[/green] AI Elements components added to web/components/")
+        return
+
+    console.print(f"[yellow]![/yellow] could not add AI Elements components: {result.reason}")
+    console.print(f"[dim]finish later with:[/dim] cd web && {result.manual_hint}")
 
 
 def new(
@@ -63,6 +109,9 @@ def new(
     model_provider: str = typer.Option(None, "--model-provider"),
     model_name: str = typer.Option(None, "--model"),
     frontend: bool = typer.Option(None, "--frontend/--no-frontend"),
+    ui: str = typer.Option(
+        None, "--ui", help=f"Chat UI: {', '.join(UI_CHOICES)}. Default: assistant-ui."
+    ),
     yes: bool = typer.Option(False, "--yes", "-y", help="Accept defaults, ask nothing."),
     install: bool = typer.Option(True, "--install/--no-install"),
     git: bool = typer.Option(True, "--git/--no-git"),
@@ -86,6 +135,22 @@ def new(
     if frontend is None:
         frontend = True if yes else Confirm.ask("Include a chat frontend?", default=True)
 
+    if frontend:
+        if ui is None:
+            ui = "assistant-ui" if yes else Prompt.ask(
+                "Chat UI", choices=WIZARD_UI_CHOICES, default="assistant-ui"
+            )
+        if ui not in UI_CHOICES:
+            raise LangctlError(
+                f"Unknown --ui value {ui!r}",
+                fix=f"Choose one of: {', '.join(UI_CHOICES)}",
+            )
+        if ui in EXPERIMENTAL_UIS:
+            console.print(f"[yellow]![/yellow] {ui} is experimental: {EXPERIMENTAL_UIS[ui]}")
+        frontend_kind = UI_CHOICES[ui]
+    else:
+        frontend_kind = "none"
+
     if model_provider is None:
         model_provider = (
             "anthropic"
@@ -101,10 +166,7 @@ def new(
         runtime=runtime,  # type: ignore[arg-type]
         mode="proxy",
         model={"provider": model_provider, "name": model_name},  # type: ignore[arg-type]
-        frontend={  # type: ignore[arg-type]
-            "enabled": frontend,
-            "kind": "nextjs_proxy" if frontend else "none",
-        },
+        frontend={"enabled": frontend, "kind": frontend_kind},  # type: ignore[arg-type]
         observability={"langsmith": True, "project": name},  # type: ignore[arg-type]
     )
 

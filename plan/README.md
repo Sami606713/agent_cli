@@ -16,6 +16,7 @@ Start with **[PLAN.md](./PLAN.md)** (the whole thing), or jump to a part:
 | [06-providers.md](./06-providers.md) | Provider interface, deploy pipeline, plugin spec. |
 | [07-edge-cases.md](./07-edge-cases.md) | Edge cases — the acceptance criteria for `doctor`/`preflight`. |
 | [08-roadmap.md](./08-roadmap.md) | Phases, verification strategy, personas, risks, open questions. |
+| [09-store-and-retention.md](./09-store-and-retention.md) | Store, semantic search, and data retention — making `langgraph.json` production-correct by default. |
 
 ## Decisions locked
 

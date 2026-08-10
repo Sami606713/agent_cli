@@ -129,6 +129,64 @@ def render_tree(
     return RenderResult(written=written, skipped=skipped)
 
 
+def render_layers(
+    templates: list[str | Path],
+    dest: Path,
+    context: dict[str, Any],
+    *,
+    overwrite: bool = False,
+) -> RenderResult:
+    """Render several template directories as stacked layers.
+
+    A later layer replaces an earlier one for the same output path — that is how
+    a UI template overrides a shared default (e.g. ``globals.css``).
+
+    Layers are resolved *in memory* before anything is written, so "later layer
+    wins" and "never clobber the user's file" stay independent. Rendering each
+    layer with ``overwrite=True`` in sequence would conflate them and let the
+    second layer silently destroy a file the user had edited.
+    """
+    resolved: dict[Path, tuple[Path, Path]] = {}  # out -> (source_root, source_file)
+
+    for template in templates:
+        src = Path(template)
+        if not src.is_absolute():
+            src = TEMPLATE_ROOT / template
+        if not src.is_dir():
+            raise FileNotFoundError(f"template not found: {src}")
+        for path in sorted(src.rglob("*")):
+            if path.is_dir() or any(p in {"__pycache__", ".DS_Store"} for p in path.parts):
+                continue
+            rel = path.relative_to(src)
+            out_parts = [substitute_path(p, context) for p in rel.parts]
+            out = dest.joinpath(*out_parts)
+            if out.name.endswith(".j2"):
+                out = out.with_name(out.name[:-3])
+            resolved[out] = (src, path)
+
+    env = _jinja()
+    written: list[Path] = []
+    skipped: list[Path] = []
+
+    for out, (_, source) in sorted(resolved.items()):
+        if out.exists() and not overwrite:
+            skipped.append(out)
+            continue
+        out.parent.mkdir(parents=True, exist_ok=True)
+        if source.name.endswith(".j2"):
+            out.write_text(
+                env.from_string(source.read_text(encoding="utf-8")).render(**context),
+                encoding="utf-8",
+            )
+        else:
+            shutil.copyfile(source, out)
+        if source.stat().st_mode & stat.S_IXUSR:
+            out.chmod(out.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+        written.append(out)
+
+    return RenderResult(written=written, skipped=skipped)
+
+
 def available_templates(kind: str) -> list[str]:
     """List template names under ``templates/<kind>/``."""
     root = TEMPLATE_ROOT / kind

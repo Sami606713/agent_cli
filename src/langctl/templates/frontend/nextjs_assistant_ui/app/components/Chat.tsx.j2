@@ -1,0 +1,140 @@
+"use client";
+
+/**
+ * Chat UI built on assistant-ui's headless primitives.
+ *
+ * The runtime (thread state, branching, composer, scroll management) comes from
+ * `@assistant-ui/react`; the visual layer is Tailwind utility classes here.
+ *
+ * We compose the primitives rather than importing a prebuilt `Thread`
+ * component: `@assistant-ui/react` no longer exports one, and the separate
+ * styled package (`@assistant-ui/react-ui`) has not been released in months
+ * while the core ships continuously. Composing the primitives keeps this on the
+ * maintained surface and means no CSS file beyond Tailwind's entry point.
+ */
+
+import {
+  AssistantRuntimeProvider,
+  ComposerPrimitive,
+  MessagePrimitive,
+  ThreadPrimitive,
+  useExternalStoreRuntime,
+} from "@assistant-ui/react";
+import { useStream } from "@langchain/react";
+import { useState } from "react";
+
+import { toThreadMessages } from "./lc-runtime";
+
+const PROXY_PREFIX = "{{ proxy_prefix }}";
+const ASSISTANT_ID = "{{ graph_id }}";
+
+/**
+ * Absolute URL pointing at this app's own proxy route.
+ *
+ * It must be absolute: the SDK builds request URLs with
+ * `new URL(`${apiUrl}${path}`)` — no base argument — so a relative prefix
+ * throws "Failed to construct 'URL': Invalid URL" on the first request.
+ * Using the page origin keeps it same-origin, so there is still no CORS and no
+ * agent address or API key in the client.
+ */
+function agentApiUrl(): string {
+  if (typeof window === "undefined") return `http://localhost${PROXY_PREFIX}`;
+  return `${window.location.origin}${PROXY_PREFIX}`;
+}
+
+// Hoisted to a const deliberately: writing `components={ { … } }` inline would
+// put a JSX double-brace in this file, and this file is a Jinja template — the
+// scaffolder would parse it as an expression and render "(Undefined, Undefined)".
+const messageComponents = { UserMessage, AssistantMessage };
+
+export default function Chat() {
+  const [apiUrl] = useState(agentApiUrl);
+  const stream = useStream({ apiUrl, assistantId: ASSISTANT_ID });
+
+  const runtime = useExternalStoreRuntime({
+    isRunning: stream.isLoading,
+    messages: stream.messages,
+    convertMessage: (message, index) => toThreadMessages([message])[0] ?? {
+      id: `empty-${index}`,
+      role: "assistant",
+      content: [{ type: "text", text: "" }],
+    },
+    onNew: async (message) => {
+      const text = message.content
+        .map((part) => (part.type === "text" ? part.text : ""))
+        .join("");
+      await stream.submit({ messages: [{ type: "human", content: text }] });
+    },
+    onCancel: async () => {
+      await stream.stop();
+    },
+  });
+
+  return (
+    <AssistantRuntimeProvider runtime={runtime}>
+      <ThreadPrimitive.Root className="flex h-dvh flex-col bg-neutral-950 text-neutral-100">
+        <header className="flex items-center justify-between border-b border-neutral-800 px-6 py-4">
+          <div>
+            <h1 className="text-sm font-semibold">{{ name }}</h1>
+            <p className="text-xs text-neutral-500">
+              {stream.threadId ? `thread ${stream.threadId.slice(0, 8)}` : "new thread"}
+            </p>
+          </div>
+        </header>
+
+        <ThreadPrimitive.Viewport className="flex-1 overflow-y-auto px-6 py-6">
+          <div className="mx-auto flex max-w-2xl flex-col gap-4">
+            <ThreadPrimitive.Empty>
+              <p className="text-sm text-neutral-500">
+                Ask something. Try:{" "}
+                <code className="text-neutral-400">what is 42 * 17?</code>
+              </p>
+            </ThreadPrimitive.Empty>
+
+            <ThreadPrimitive.Messages components={messageComponents} />
+          </div>
+        </ThreadPrimitive.Viewport>
+
+        <ComposerPrimitive.Root className="border-t border-neutral-800 px-6 py-4">
+          <div className="mx-auto flex max-w-2xl gap-2">
+            <ComposerPrimitive.Input
+              autoFocus
+              placeholder="Send a message…"
+              className="flex-1 resize-none rounded-lg border border-neutral-800 bg-neutral-900 px-4 py-2 text-sm outline-none focus:border-neutral-600"
+            />
+            <ThreadPrimitive.If running={false}>
+              <ComposerPrimitive.Send className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium disabled:opacity-40">
+                Send
+              </ComposerPrimitive.Send>
+            </ThreadPrimitive.If>
+            <ThreadPrimitive.If running>
+              <ComposerPrimitive.Cancel className="rounded-lg border border-neutral-700 px-4 py-2 text-sm">
+                Stop
+              </ComposerPrimitive.Cancel>
+            </ThreadPrimitive.If>
+          </div>
+        </ComposerPrimitive.Root>
+      </ThreadPrimitive.Root>
+    </AssistantRuntimeProvider>
+  );
+}
+
+function UserMessage() {
+  return (
+    <MessagePrimitive.Root className="self-end max-w-[85%]">
+      <div className="rounded-2xl bg-blue-600 px-4 py-2 text-sm whitespace-pre-wrap">
+        <MessagePrimitive.Parts />
+      </div>
+    </MessagePrimitive.Root>
+  );
+}
+
+function AssistantMessage() {
+  return (
+    <MessagePrimitive.Root className="self-start max-w-[85%]">
+      <div className="rounded-2xl bg-neutral-900 px-4 py-2 text-sm whitespace-pre-wrap">
+        <MessagePrimitive.Parts />
+      </div>
+    </MessagePrimitive.Root>
+  );
+}

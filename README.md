@@ -36,6 +36,27 @@ Three things fall out of this:
   local agent; `langctl deploy` sets it to the deployed Agent Server URL. The frontend
   source does not change.
 
+## Chat UI
+
+`langctl new` scaffolds one of three UIs. All share the same proxy, streaming
+contract, and `langctl dev` behaviour — only `web/app/components/` differs.
+
+| `--ui` | What you get | CSS |
+|---|---|---|
+| `assistant-ui` *(default)* | assistant-ui runtime (threads, branching, composer) via npm; we ship a ~130-line converter you own | Tailwind utilities only |
+| `minimal` | one hand-written `Chat.tsx`, zero UI dependencies | Tailwind utilities only |
+| `ai-elements` *(experimental)* | shadcn-registry components copied into `web/components/` | Tailwind `@theme` tokens |
+
+No template contains hand-written CSS. `globals.css` is `@import "tailwindcss";`
+and nothing else, except `ai-elements`, which adds a `@theme` token block because
+its components reference semantic classes. A test enforces this.
+
+> **`ai-elements` is experimental and currently fails `npm run build`.** Its
+> generated components pull `streamdown`, which resolves two incompatible copies
+> of `shiki`; npm `overrides` do not dedupe them. Our own files typecheck clean —
+> the failure is entirely in the vendored components. It is excluded from the
+> interactive wizard and reachable only via an explicit `--ui ai-elements`.
+
 ## Commands
 
 | Command | What it does |

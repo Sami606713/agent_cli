@@ -6,7 +6,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-from .render import render_tree
+from .render import render_layers, render_tree
 from .spec import AgentSpec
 
 #: Vercel's Hobby plan caps serverless functions at 60s. Agent runs regularly
@@ -43,10 +43,21 @@ def backend_template(spec: AgentSpec) -> str:
     return f"backend/{spec.runtime}"
 
 
-def frontend_template(spec: AgentSpec) -> str | None:
+#: Layer shared by every frontend: the proxy route, layout, Tailwind entry, and
+#: build config. Rendered before the UI-specific layer, which may override files
+#: (nextjs_ai_elements replaces globals.css to add its design tokens).
+SHARED_FRONTEND_TEMPLATE = "frontend/_shared"
+
+
+def frontend_templates(spec: AgentSpec) -> list[str]:
+    """Template layers for the frontend, in render order.
+
+    One shared layer plus one UI layer. Keeping the proxy route in exactly one
+    place means a fix to it cannot land in two UIs and miss the third.
+    """
     if not spec.frontend.enabled or spec.frontend.kind == "none":
-        return None
-    return f"frontend/{spec.frontend.kind}"
+        return []
+    return [SHARED_FRONTEND_TEMPLATE, f"frontend/{spec.frontend.kind}"]
 
 
 def scaffold(spec: AgentSpec, dest: Path, *, overwrite: bool = False) -> list[Path]:
@@ -57,11 +68,11 @@ def scaffold(spec: AgentSpec, dest: Path, *, overwrite: bool = False) -> list[Pa
     result = render_tree(backend_template(spec), dest, context, overwrite=overwrite)
     written += result.written
 
-    fe = frontend_template(spec)
-    if fe:
-        # The frontend is a separate npm project under web/ so its node_modules
-        # and build output never tangle with the Python package.
-        result = render_tree(fe, dest / "web", context, overwrite=overwrite)
+    # The frontend is a separate npm project under web/ so its node_modules and
+    # build output never tangle with the Python package.
+    layers = frontend_templates(spec)
+    if layers:
+        result = render_layers(layers, dest / "web", context, overwrite=overwrite)
         written += result.written
 
     spec.save(dest / "agent.yaml")

@@ -1,0 +1,117 @@
+"use client";
+
+/**
+ * Chat UI built on AI Elements.
+ *
+ * The components under `@/components/ai-elements/*` are **source files in this
+ * repository**, added by the registry CLI (shadcn-style) rather than installed
+ * from npm. Edit them freely — they are yours. The trade-off is that they do
+ * not receive upstream fixes; re-run the CLI to refresh them.
+ *
+ * If that directory is missing, the scaffold's post-install step did not run
+ * (usually no network). Run:
+ *
+ *   cd web && npx ai-elements@latest add conversation message prompt-input tool reasoning
+ */
+
+import {
+  Conversation,
+  ConversationContent,
+  ConversationEmptyState,
+} from "@/components/ai-elements/conversation";
+import { Message, MessageContent } from "@/components/ai-elements/message";
+import {
+  PromptInput,
+  PromptInputSubmit,
+  PromptInputTextarea,
+} from "@/components/ai-elements/prompt-input";
+import { useStream } from "@langchain/react";
+import { useState } from "react";
+
+const PROXY_PREFIX = "{{ proxy_prefix }}";
+const ASSISTANT_ID = "{{ graph_id }}";
+
+/**
+ * Absolute URL pointing at this app's own proxy route. It must be absolute:
+ * the SDK builds URLs with `new URL(apiUrl + path)` and no base, so a relative
+ * prefix throws "Invalid URL" on the first request.
+ */
+function agentApiUrl(): string {
+  if (typeof window === "undefined") return `http://localhost${PROXY_PREFIX}`;
+  return `${window.location.origin}${PROXY_PREFIX}`;
+}
+
+function textOf(content: unknown): string {
+  if (typeof content === "string") return content;
+  if (!Array.isArray(content)) return "";
+  return content
+    .map((part) =>
+      typeof part === "string"
+        ? part
+        : part && typeof part === "object" && "text" in part
+          ? String((part as { text: unknown }).text)
+          : "",
+    )
+    .join("");
+}
+
+export default function Chat() {
+  const [input, setInput] = useState("");
+  const [apiUrl] = useState(agentApiUrl);
+  const stream = useStream({ apiUrl, assistantId: ASSISTANT_ID });
+
+  // PromptInput calls onSubmit with its own parsed message first, then the DOM
+  // event — not the plain form handler signature.
+  const send = (_message: unknown, event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const text = input.trim();
+    if (!text || stream.isLoading) return;
+    setInput("");
+    stream.submit({ messages: [{ type: "human", content: text }] });
+  };
+
+  return (
+    <div className="flex h-dvh flex-col bg-background text-foreground">
+      <header className="border-b border-border px-6 py-4">
+        <h1 className="text-sm font-semibold">{{ name }}</h1>
+        <p className="text-xs text-muted-foreground">
+          {stream.threadId ? `thread ${stream.threadId.slice(0, 8)}` : "new thread"}
+        </p>
+      </header>
+
+      <Conversation className="flex-1">
+        <ConversationContent>
+          {stream.messages.length === 0 && (
+            <ConversationEmptyState
+              title="Ask something"
+              description="Try: what is 42 * 17?"
+            />
+          )}
+
+          {stream.messages.map((message, index) => {
+            const from = message.getType() === "human" ? "user" : "assistant";
+            const body = textOf(message.content);
+            if (!body) return null;
+            return (
+              <Message from={from} key={message.id ?? index}>
+                <MessageContent>{body}</MessageContent>
+              </Message>
+            );
+          })}
+        </ConversationContent>
+      </Conversation>
+
+      <PromptInput onSubmit={send} className="border-t border-border p-4">
+        <PromptInputTextarea
+          value={input}
+          onChange={(event) => setInput(event.currentTarget.value)}
+          placeholder="Send a message…"
+        />
+        <PromptInputSubmit
+          disabled={!input.trim()}
+          status={stream.isLoading ? "streaming" : undefined}
+        />
+      </PromptInput>
+    </div>
+  );
+}
