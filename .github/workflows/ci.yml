@@ -1,0 +1,117 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  # A newer push to the same branch makes the in-flight run irrelevant.
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: test (py${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # The full range the package claims to support, because the supervisor
+        # touches process groups and signals — the parts most likely to differ.
+        python-version: ["3.11", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Set up Python ${{ matrix.python-version }}
+        run: uv python install ${{ matrix.python-version }}
+
+      - name: Install
+        run: uv sync --extra dev --python ${{ matrix.python-version }}
+
+      - name: Lint
+        run: uv run ruff check src tests
+
+      - name: Test
+        run: uv run pytest -q
+
+  scaffold:
+    name: scaffold from the built wheel
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Build
+        run: uv build
+
+      # Installing the wheel rather than the source tree is the only way to
+      # catch templates being excluded from the distribution — a failure mode
+      # that every source-tree test passes straight through.
+      - name: Install the wheel into a clean environment
+        run: |
+          uv venv .fresh
+          uv pip install --python .fresh dist/*.whl
+
+      - name: Scaffold a project
+        run: .fresh/bin/langctl new ci-check --yes --no-install --no-git
+
+      - name: Assert the scaffold is complete
+        run: |
+          set -e
+          for f in agent.yaml langgraph.json pyproject.toml .env.example \
+                   src/ci_check/agent.py \
+                   web/package.json \
+                   "web/app/api/agent/[...path]/route.ts" \
+                   web/app/components/Chat.tsx; do
+            test -f "ci-check/$f" || { echo "missing: $f"; exit 1; }
+          done
+          # The bug that shipped in 0.1.0: a relative apiUrl throws in the SDK.
+          grep -q "window.location.origin" ci-check/web/app/components/Chat.tsx
+
+  frontend:
+    name: frontend typecheck + build (${{ matrix.ui }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # ai-elements is excluded: its vendored components currently fail
+        # typecheck on an upstream shiki conflict. See CHANGELOG "Known issues".
+        ui: [assistant-ui, minimal]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install langctl
+        run: uv sync --extra dev
+
+      - name: Scaffold
+        run: uv run langctl new web-check --yes --ui ${{ matrix.ui }} --no-install --no-git
+
+      - name: Install frontend dependencies
+        working-directory: web-check/web
+        run: npm install --no-fund --no-audit
+
+      - name: Typecheck
+        working-directory: web-check/web
+        run: npx tsc --noEmit
+
+      - name: Build
+        working-directory: web-check/web
+        run: npx next build

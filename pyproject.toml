@@ -1,10 +1,37 @@
 [project]
 name = "langctl"
-version = "0.1.0"
+# Single-sourced from src/langctl/__init__.py so the package and `--version`
+# can never disagree.
+dynamic = ["version"]
 description = "Scaffold, run, and deploy production LangChain agents — frontend and agent in one command."
 readme = "README.md"
 requires-python = ">=3.11"
-license = { text = "Apache-2.0" }
+license = "Apache-2.0"
+license-files = ["LICENSE"]
+authors = [{ name = "langctl contributors" }]
+keywords = [
+    "langchain",
+    "langgraph",
+    "langsmith",
+    "agents",
+    "llm",
+    "cli",
+    "scaffold",
+    "nextjs",
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Software Development :: Code Generators",
+    "Topic :: Software Development :: Libraries :: Application Frameworks",
+    "Typing :: Typed",
+]
 dependencies = [
     "typer>=0.15",
     "rich>=13.7",
@@ -22,6 +49,12 @@ dev = [
     "ruff>=0.6",
 ]
 
+[project.urls]
+Homepage = "https://github.com/Sami606713/agent_cli"
+Repository = "https://github.com/Sami606713/agent_cli"
+Issues = "https://github.com/Sami606713/agent_cli/issues"
+Changelog = "https://github.com/Sami606713/agent_cli/blob/main/CHANGELOG.md"
+
 [project.scripts]
 langctl = "langctl.main:app"
 
@@ -29,8 +62,15 @@ langctl = "langctl.main:app"
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
+[tool.hatch.version]
+path = "src/langctl/__init__.py"
+
 [tool.hatch.build.targets.wheel]
 packages = ["src/langctl"]
+
+[tool.hatch.build.targets.sdist]
+# Ship the tests and plan with the sdist so the package is reproducible from it.
+include = ["src", "tests", "plan", "README.md", "CHANGELOG.md", "LICENSE", "pyproject.toml"]
 
 [tool.ruff]
 line-length = 100

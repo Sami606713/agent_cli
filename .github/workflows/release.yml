@@ -9,22 +9,87 @@ permissions:
   contents: read
 
 jobs:
+  # A PyPI version number can never be reused, so a bad release is permanent.
+  # Nothing is built until the suite passes on every supported Python.
+  test:
+    name: test (py${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: true
+      matrix:
+        python-version: ["3.11", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Set up Python ${{ matrix.python-version }}
+        run: uv python install ${{ matrix.python-version }}
+
+      - name: Install
+        run: uv sync --extra dev --python ${{ matrix.python-version }}
+
+      - name: Lint
+        run: uv run ruff check src tests
+
+      - name: Test
+        run: uv run pytest -q
+
   build:
     name: Build distribution
+    needs: test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
 
-      - name: Install build tools
-        run: pip install build
+      # The tag is the release's identity; if it disagrees with the package
+      # version, the wrong version publishes under the right-looking tag.
+      - name: Verify the tag matches the package version
+        run: |
+          set -e
+          tag="${GITHUB_REF_NAME#v}"
+          version="$(uv run --no-project --with hatchling python -c "
+          import re, pathlib
+          src = pathlib.Path('src/langctl/__init__.py').read_text()
+          print(re.search(r'__version__ = \"([^\"]+)\"', src).group(1))
+          ")"
+          echo "tag=$tag  package=$version"
+          test "$tag" = "$version" || {
+            echo "::error::tag v$tag does not match package version $version"
+            exit 1
+          }
 
       - name: Build sdist and wheel
-        run: python -m build
+        run: uv build
+
+      # Catches templates being dropped from the distribution — the failure the
+      # source-tree tests structurally cannot see.
+      - name: Verify templates are inside the wheel
+        run: |
+          python - <<'PY'
+          import glob, sys, zipfile
+          wheel = sorted(glob.glob("dist/*.whl"))[-1]
+          names = zipfile.ZipFile(wheel).namelist()
+          templates = [n for n in names if "/templates/" in n]
+          print(f"{wheel}: {len(templates)} template files")
+          required = [
+              "langctl/templates/backend/python/src/__pkg__/agent.py.j2",
+              "langctl/templates/frontend/_shared/app/__proxy_route_dir__/[...path]/route.ts.j2",
+              "langctl/templates/frontend/nextjs_assistant_ui/app/components/Chat.tsx.j2",
+          ]
+          missing = [r for r in required if r not in names]
+          if missing:
+              sys.exit(f"missing from wheel: {missing}")
+          PY
+
+      - name: Check distribution metadata
+        run: uv run --no-project --with twine twine check dist/*
 
       - name: Upload dist artifacts
         uses: actions/upload-artifact@v4
@@ -38,7 +103,7 @@ jobs:
     runs-on: ubuntu-latest
     environment: testpypi
     permissions:
-      id-token: write  # required for trusted publishing
+      id-token: write # required for trusted publishing
     steps:
       - name: Download dist artifacts
         uses: actions/download-artifact@v4
@@ -50,6 +115,8 @@ jobs:
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           repository-url: https://test.pypi.org/legacy/
+          # A re-run of the same tag should not fail on an existing file.
+          skip-existing: true
 
   publish-pypi:
     name: Publish to PyPI
@@ -57,7 +124,7 @@ jobs:
     runs-on: ubuntu-latest
     environment: pypi
     permissions:
-      id-token: write  # required for trusted publishing
+      id-token: write # required for trusted publishing
     steps:
       - name: Download dist artifacts
         uses: actions/download-artifact@v4
