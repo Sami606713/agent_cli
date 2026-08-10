@@ -52,6 +52,21 @@ Three things fall out of this:
 `dockerfile_lines`, …) survive, and drift in owned keys is reported instead of silently
 clobbered.
 
+## Install
+
+```bash
+uv tool install -e .        # editable: source edits take effect immediately
+agentctl --version
+```
+
+Install **editable**. A non-editable `uv tool install .` is cached by version, so
+after changing the source `uv tool install --force .` reports `Audited …` and keeps
+running the old code — the version string has to change for the cache to miss. If
+you already hit that: `uv tool install --force --reinstall -e .`
+
+When debugging which copy is running, call it by absolute path
+(`~/.local/bin/agentctl`): an activated project venv shadows the global binary.
+
 ## Development
 
 ```bash
