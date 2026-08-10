@@ -3,15 +3,30 @@
 import { useStream } from "@langchain/react";
 import { useState } from "react";
 
-/**
- * `apiUrl` is a same-origin path, not the agent's address.
- *
- * Requests go to this app's proxy route, which forwards them to whatever
- * `AGENT_PROXY_TARGET` names — the local dev server now, a deployed Agent
- * Server after `agentctl deploy`. This component never changes between the two.
- */
-const API_URL = "{{ proxy_prefix }}";
+const PROXY_PREFIX = "{{ proxy_prefix }}";
 const ASSISTANT_ID = "{{ graph_id }}";
+
+/**
+ * Absolute URL pointing at this app's own proxy route.
+ *
+ * It must be absolute: the SDK builds request URLs with
+ * `new URL(`${apiUrl}${path}`)` — a single-argument constructor with no base —
+ * so a relative prefix like "{{ proxy_prefix }}" throws
+ * "Failed to construct 'URL': Invalid URL" on the first request.
+ *
+ * Using `window.location.origin` keeps it same-origin, so there is still no
+ * CORS and no agent address in the client. The proxy forwards to whatever
+ * `AGENT_PROXY_TARGET` names — the local dev server now, a deployed Agent
+ * Server later — and this component never changes between the two.
+ */
+function agentApiUrl(): string {
+  if (typeof window === "undefined") {
+    // Server render only. No requests are issued during SSR; this value merely
+    // has to parse, because the SDK client is constructed during render.
+    return `http://localhost${PROXY_PREFIX}`;
+  }
+  return `${window.location.origin}${PROXY_PREFIX}`;
+}
 
 function textOf(content: unknown): string {
   if (typeof content === "string") return content;
@@ -31,7 +46,8 @@ function textOf(content: unknown): string {
 
 export default function Chat() {
   const [input, setInput] = useState("");
-  const stream = useStream({ apiUrl: API_URL, assistantId: ASSISTANT_ID });
+  const [apiUrl] = useState(agentApiUrl);
+  const stream = useStream({ apiUrl, assistantId: ASSISTANT_ID });
 
   const send = (event: React.FormEvent) => {
     event.preventDefault();

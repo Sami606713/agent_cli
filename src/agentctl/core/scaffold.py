@@ -31,6 +31,10 @@ def render_context(spec: AgentSpec) -> dict[str, Any]:
         "backend_port": spec.backend.port,
         "frontend_port": spec.frontend.port,
         "proxy_prefix": spec.frontend.proxy_prefix,
+        # Route handlers must live at the path the client calls, so the
+        # directory is derived from the prefix rather than hardcoded — otherwise
+        # changing proxy_prefix in agent.yaml silently 404s every request.
+        "proxy_route_dir": spec.frontend.proxy_prefix.lstrip("/"),
         "max_duration": DEFAULT_MAX_DURATION,
     }
 
