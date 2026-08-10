@@ -1,0 +1,42 @@
+[project]
+name = "{{ name }}"
+version = "0.1.0"
+description = "{{ name }} — a LangChain agent"
+# Upper bound is deliberate: the Agent Server supports 3.11-3.13 (the
+# `python_version` enum in langgraph.json). Without it, uv would resolve a newer
+# local interpreter than the one your deployment runs on.
+requires-python = ">=3.11,<3.14"
+dependencies = [
+    "langchain>=1.0",
+    "langgraph>=1.0",
+{% if model_provider == "anthropic" %}
+    "langchain-anthropic>=1.0",
+{% elif model_provider == "openai" %}
+    "langchain-openai>=1.0",
+{% elif model_provider == "google" %}
+    "langchain-google-genai>=2.0",
+{% endif %}
+]
+
+[project.optional-dependencies]
+dev = [
+    "langgraph-cli[inmem]>=0.4",
+    "pytest>=8.0",
+    "pytest-asyncio>=0.24",
+    "ruff>=0.6",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/{{ pkg }}"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+env = ["{{ name_upper }}_SKIP_CONFIG_VALIDATION=1"]

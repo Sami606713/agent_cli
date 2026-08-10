@@ -1,0 +1,42 @@
+"""The {{ name }} agent.
+
+`langgraph.json` points at the module-level `graph` in this file. Anything the
+Agent Server, Studio, or a deployment needs is reachable from that one symbol.
+
+Imports below are absolute, not relative. The Agent Server loads this file by
+path (`./src/{{ pkg }}/agent.py:graph`) rather than importing it as part of a
+package, so `from .config import ...` would fail with "attempted relative import
+with no known parent package". The package is installed (`dependencies: ["."]`),
+so absolute imports resolve.
+"""
+
+from __future__ import annotations
+
+from langchain.agents import create_agent
+
+from {{ pkg }}.config import settings
+from {{ pkg }}.prompts import SYSTEM_PROMPT
+from {{ pkg }}.tools import TOOLS
+
+
+def _checkpointer():
+    """Pick a checkpointer for the current environment.
+
+    In production the Agent Server injects a managed Postgres checkpointer, so
+    returning None here is correct — passing our own would override it. Locally
+    we use an in-memory saver so threads survive within a `agentctl dev` session.
+    """
+    if settings.is_server_managed:
+        return None
+    from langgraph.checkpoint.memory import InMemorySaver
+
+    return InMemorySaver()
+
+
+graph = create_agent(
+    model=settings.model_identifier,
+    tools=TOOLS,
+    system_prompt=SYSTEM_PROMPT,
+    checkpointer=_checkpointer(),
+    name="{{ name }}",
+)

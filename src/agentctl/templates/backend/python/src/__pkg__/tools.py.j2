@@ -1,0 +1,51 @@
+"""Tools available to the agent.
+
+Add tools here and list them in `TOOLS`. Keep the docstring sharp — the model
+reads it to decide when to call the tool, so it is prompt text, not just docs.
+"""
+
+from __future__ import annotations
+
+from datetime import datetime, timezone
+
+from langchain_core.tools import tool
+
+
+@tool
+def get_current_time(timezone_name: str = "UTC") -> str:
+    """Get the current date and time.
+
+    Use this whenever the answer depends on what time it is now — the model's
+    own sense of the current date is unreliable.
+
+    Args:
+        timezone_name: IANA timezone name, e.g. "UTC" or "America/New_York".
+    """
+    if timezone_name.upper() == "UTC":
+        return datetime.now(timezone.utc).isoformat()
+    try:
+        from zoneinfo import ZoneInfo
+
+        return datetime.now(ZoneInfo(timezone_name)).isoformat()
+    except Exception:
+        # Returning a message beats raising: the model can recover from this.
+        return f"Unknown timezone {timezone_name!r}. Try 'UTC'."
+
+
+@tool
+def calculate(expression: str) -> str:
+    """Evaluate a arithmetic expression, e.g. "42 * 17".
+
+    Only digits, spaces and + - * / ( ) . are accepted.
+    """
+    allowed = set("0123456789+-*/(). ")
+    if not expression or set(expression) - allowed:
+        return "Refused: only basic arithmetic characters are allowed."
+    try:
+        # Safe: the character allowlist above excludes names, calls and attributes.
+        return str(eval(expression, {"__builtins__": {}}, {}))  # noqa: S307
+    except Exception as exc:
+        return f"Could not evaluate {expression!r}: {exc}"
+
+
+TOOLS = [get_current_time, calculate]

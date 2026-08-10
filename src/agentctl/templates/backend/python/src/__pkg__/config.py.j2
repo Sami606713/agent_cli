@@ -1,0 +1,52 @@
+"""Configuration, validated at import time.
+
+Failing here — at server start, with a clear message — is much cheaper than
+failing on the first user message with a provider auth error.
+"""
+
+from __future__ import annotations
+
+import os
+from dataclasses import dataclass
+
+
+class ConfigError(RuntimeError):
+    pass
+
+
+@dataclass(frozen=True)
+class Settings:
+    model_provider: str = os.getenv("MODEL_PROVIDER", "{{ model_provider }}")
+    model_name: str = os.getenv("MODEL_NAME", "{{ model_name }}")
+
+    @property
+    def model_identifier(self) -> str:
+        return f"{self.model_provider}:{self.model_name}"
+
+    @property
+    def is_server_managed(self) -> bool:
+        """True when running inside a LangGraph Agent Server deployment.
+
+        The server sets this and supplies its own Postgres checkpointer and store;
+        `langgraph dev` does not.
+        """
+        return bool(os.getenv("LANGGRAPH_CLOUD") or os.getenv("LANGGRAPH_API_URL"))
+
+    def validate(self) -> None:
+        required = {
+            "anthropic": "ANTHROPIC_API_KEY",
+            "openai": "OPENAI_API_KEY",
+            "google": "GOOGLE_API_KEY",
+        }.get(self.model_provider)
+        if required and not os.getenv(required):
+            raise ConfigError(
+                f"{required} is not set, but MODEL_PROVIDER={self.model_provider}.\n"
+                f"Add it to .env — see .env.example."
+            )
+
+
+settings = Settings()
+
+# Skipped during tests so the suite runs without provider credentials.
+if not os.getenv("{{ name_upper }}_SKIP_CONFIG_VALIDATION"):
+    settings.validate()

@@ -1,0 +1,45 @@
+"""Tests for the {{ name }} agent.
+
+These run without provider credentials: tools are pure functions and the graph
+is only inspected, not invoked. Add model-backed tests behind a marker.
+"""
+
+from {{ pkg }}.tools import TOOLS, calculate, get_current_time
+
+
+def test_tools_are_registered():
+    names = {t.name for t in TOOLS}
+    assert {"get_current_time", "calculate"} <= names
+
+
+def test_every_tool_has_a_description():
+    # The description is prompt text the model reads; an empty one is a bug.
+    for t in TOOLS:
+        assert t.description and t.description.strip()
+
+
+class TestCalculate:
+    def test_evaluates_arithmetic(self):
+        assert calculate.invoke({"expression": "42 * 17"}) == "714"
+
+    def test_refuses_non_arithmetic(self):
+        assert "Refused" in calculate.invoke({"expression": "__import__('os').system('ls')"})
+
+    def test_handles_bad_expression_without_raising(self):
+        assert "Could not evaluate" in calculate.invoke({"expression": "1/"})
+
+
+class TestCurrentTime:
+    def test_returns_iso_timestamp(self):
+        assert "T" in get_current_time.invoke({"timezone_name": "UTC"})
+
+    def test_unknown_timezone_returns_message(self):
+        assert "Unknown timezone" in get_current_time.invoke({"timezone_name": "Mars/Olympus"})
+
+
+def test_graph_is_importable_and_compiled():
+    # Catches the most common deploy-time failure: langgraph.json points at a
+    # symbol that does not import cleanly.
+    from {{ pkg }}.agent import graph
+
+    assert hasattr(graph, "invoke")

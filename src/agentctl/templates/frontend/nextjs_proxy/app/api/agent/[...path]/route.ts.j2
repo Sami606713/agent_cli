@@ -1,0 +1,136 @@
+/**
+ * Same-origin proxy to the Agent Server.
+ *
+ * The browser only ever talks to `{{ proxy_prefix }}/...` on this origin, so:
+ *
+ *   1. CORS never applies — there is no cross-origin request to preflight;
+ *   2. `LANGSMITH_API_KEY` stays on the server. It is attached here and is never
+ *      shipped to the browser. Never expose it via a `NEXT_PUBLIC_` variable.
+ *   3. dev and production differ by one environment variable. Unset means the
+ *      local `langgraph dev` server; in production `agentctl deploy` sets
+ *      `AGENT_PROXY_TARGET` to the deployed Agent Server URL. No code changes.
+ *
+ * A `next.config` rewrite cannot replace this: rewrites cannot inject the auth
+ * header, and they buffer streamed responses.
+ */
+
+// The Node runtime is required: the Edge runtime cannot hold a long-lived
+// streaming connection to an arbitrary upstream reliably.
+export const runtime = "nodejs";
+// Never cache or statically optimise: every request is a live agent call.
+export const dynamic = "force-dynamic";
+// Agent runs are long. Raise this if your host allows it (Vercel Pro: 300).
+export const maxDuration = {{ max_duration }};
+
+const DEFAULT_TARGET = "http://127.0.0.1:{{ backend_port }}";
+
+/** Hop-by-hop headers must not be forwarded (RFC 9110 §7.6.1). */
+const HOP_BY_HOP = new Set([
+  "connection",
+  "keep-alive",
+  "proxy-authenticate",
+  "proxy-authorization",
+  "te",
+  "trailer",
+  "transfer-encoding",
+  "upgrade",
+  "host",
+  "content-length",
+]);
+
+function target(): string {
+  return (process.env.AGENT_PROXY_TARGET ?? DEFAULT_TARGET).replace(/\/+$/, "");
+}
+
+function requestHeaders(incoming: Headers): Headers {
+  const headers = new Headers();
+  incoming.forEach((value, key) => {
+    if (!HOP_BY_HOP.has(key.toLowerCase())) headers.set(key, value);
+  });
+
+  // Server-side only. Present when talking to a deployed Agent Server; absent
+  // for local `langgraph dev`, which needs no auth.
+  const apiKey = process.env.LANGSMITH_API_KEY;
+  if (apiKey) headers.set("x-api-key", apiKey);
+
+  // Upstream must not compress: we stream the body through untouched, and a
+  // compressed SSE stream would buffer until the compression window flushes.
+  headers.set("accept-encoding", "identity");
+  return headers;
+}
+
+function responseHeaders(upstream: Headers, isStream: boolean): Headers {
+  const headers = new Headers();
+  upstream.forEach((value, key) => {
+    const k = key.toLowerCase();
+    // fetch() has already decoded the body, so forwarding the original
+    // content-encoding/length would make the browser decode it twice.
+    if (HOP_BY_HOP.has(k) || k === "content-encoding") return;
+    headers.set(key, value);
+  });
+
+  if (isStream) {
+    headers.set("cache-control", "no-cache, no-transform");
+    headers.set("connection", "keep-alive");
+    // Tells nginx and similar reverse proxies not to buffer the SSE stream.
+    // Without it, tokens arrive in one burst at the end of the run.
+    headers.set("x-accel-buffering", "no");
+  }
+  return headers;
+}
+
+async function proxy(request: Request, path: string[]): Promise<Response> {
+  const url = new URL(request.url);
+  const upstreamUrl = `${target()}/${path.join("/")}${url.search}`;
+
+  const hasBody = request.method !== "GET" && request.method !== "HEAD";
+
+  let upstream: Response;
+  try {
+    upstream = await fetch(upstreamUrl, {
+      method: request.method,
+      headers: requestHeaders(request.headers),
+      body: hasBody ? request.body : undefined,
+      // Required by Node/undici when streaming a request body through.
+      ...(hasBody ? { duplex: "half" } : {}),
+      redirect: "manual",
+      cache: "no-store",
+    } as RequestInit);
+  } catch (error) {
+    // The most common cause in dev is the agent still starting up or having
+    // crashed. Say so plainly instead of surfacing an opaque fetch failure.
+    return Response.json(
+      {
+        error: "agent_unreachable",
+        message: `Could not reach the agent server at ${target()}.`,
+        hint: "Is it running? `agentctl dev` starts it automatically.",
+        detail: error instanceof Error ? error.message : String(error),
+      },
+      { status: 502 },
+    );
+  }
+
+  const isStream = (upstream.headers.get("content-type") ?? "").includes("text/event-stream");
+
+  return new Response(upstream.body, {
+    status: upstream.status,
+    statusText: upstream.statusText,
+    headers: responseHeaders(upstream.headers, isStream),
+  });
+}
+
+// Next 15 passes route params as a Promise.
+type Ctx = { params: Promise<{ path: string[] }> };
+
+async function handler(request: Request, ctx: Ctx): Promise<Response> {
+  const { path } = await ctx.params;
+  return proxy(request, path ?? []);
+}
+
+export const GET = handler;
+export const POST = handler;
+export const PUT = handler;
+export const PATCH = handler;
+export const DELETE = handler;
+export const HEAD = handler;
+export const OPTIONS = handler;

@@ -1,0 +1,23 @@
+# secrets
+.env
+.env.local
+.env.*.local
+
+# agentctl
+.agentctl/
+.langgraph_api/
+
+# python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+dist/
+build/
+*.egg-info/
+
+# node (frontend lives in web/)
+node_modules/
+.next/
