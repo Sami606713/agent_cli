@@ -24,7 +24,7 @@ def _checkpointer():
 
     In production the Agent Server injects a managed Postgres checkpointer, so
     returning None here is correct — passing our own would override it. Locally
-    we use an in-memory saver so threads survive within a `agentctl dev` session.
+    we use an in-memory saver so threads survive within a `langctl dev` session.
     """
     if settings.is_server_managed:
         return None

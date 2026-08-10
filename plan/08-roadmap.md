@@ -1,20 +1,20 @@
 # Roadmap, verification, personas, risks
 
-Part of [`agentctl` — a Next.js-style CLI for building, running, and deploying LangChain agents](./PLAN.md).
+Part of [`langctl` — a Next.js-style CLI for building, running, and deploying LangChain agents](./PLAN.md).
 
 ## 8. Phases
 
 
 | Phase | Scope | Done when |
 |---|---|---|
-| **0. Skeleton** | Typer app, `AgentSpec`, manifest, renderer, errors, provider ABC, `doctor`. | `agentctl doctor` prints a full environment table. |
-| **1. ★ Unified runtime** | `supervisor.py`, `health.py`, proxy templates, `minimal` + `react_agent` Python backends, `nextjs_proxy` frontend, `agentctl new` + `agentctl dev`. | `agentctl new x && cd x && agentctl dev` → one URL, chat with the agent, edit `agent.py`, see hot reload, Ctrl-C leaves nothing running. |
-| **2. Deploy v1** | `langsmith_cloud` + `vercel`, wiring, smoke test, state, `logs`/`rollback`/`destroy`, CI. | One `agentctl deploy` → both halves live and wired; a backend-only redeploy still leaves the UI working. |
+| **0. Skeleton** | Typer app, `AgentSpec`, manifest, renderer, errors, provider ABC, `doctor`. | `langctl doctor` prints a full environment table. |
+| **1. ★ Unified runtime** | `supervisor.py`, `health.py`, proxy templates, `minimal` + `react_agent` Python backends, `nextjs_proxy` frontend, `langctl new` + `langctl dev`. | `langctl new x && cd x && langctl dev` → one URL, chat with the agent, edit `agent.py`, see hot reload, Ctrl-C leaves nothing running. |
+| **2. Deploy v1** | `langsmith_cloud` + `vercel`, wiring, smoke test, state, `logs`/`rollback`/`destroy`, CI. | One `langctl deploy` → both halves live and wired; a backend-only redeploy still leaves the UI working. |
 | **3. No-plan path** | Mode B `nextjs_embedded` + `compose_ssh` standalone provider. | A user with no LangSmith plan deploys end-to-end. |
 | **4. Breadth** | `rag`/`deep_agent`/`multi_agent`, generative UI (`ui` key), `vite_proxy`, `flyio`/`render`, `add *`, eval harness. | |
 | **5. Any cloud** | `ecs`/`cloudrun`/`k8s_helm` as reviewable Terraform/Helm emitters, plugin spec docs, `eject`. | A platform engineer adds an internal cloud without forking. |
 
-Phase 1 is the product. If `agentctl dev` isn't magic, nothing after it matters.
+Phase 1 is the product. If `langctl dev` isn't magic, nothing after it matters.
 
 ---
 
@@ -23,8 +23,8 @@ Phase 1 is the product. If `agentctl dev` isn't magic, nothing after it matters.
 
 - **Unit:** spec validation; `langgraph.json` merge/drift; wiring for both modes; capability matrix (serverless × standalone → blocked); supervisor lifecycle with fake processes (health gate, crash propagation, teardown, orphan reaping); proxy header injection and secret-leak lint.
 - **Golden-file:** snapshot every rendered template; generated projects must pass `ruff`/`eslint` and `mypy`/`tsc`.
-- **★ Runtime integration (the critical suite):** scaffold into a tmpdir, run `agentctl dev` against a **stub model server**, then assert — `:2024/ok` healthy; `GET :3000/` 200; `POST :3000/api/agent/threads` proxies through; a run **streams SSE through the proxy** with tokens arriving incrementally (not buffered — assert timing, not just the final body); editing `agent.py` triggers reload and the next request succeeds; SIGINT leaves **zero** surviving PIDs and both ports free. Matrix: `{python, node} × {nextjs_proxy, vite_proxy, none}` + Mode B, on Linux and macOS, plus a Windows smoke run.
-- **Docker:** `agentctl dev --docker` → `langgraph up` on 8123, proxy retargets, thread state survives a container restart (proves the checkpointer).
+- **★ Runtime integration (the critical suite):** scaffold into a tmpdir, run `langctl dev` against a **stub model server**, then assert — `:2024/ok` healthy; `GET :3000/` 200; `POST :3000/api/agent/threads` proxies through; a run **streams SSE through the proxy** with tokens arriving incrementally (not buffered — assert timing, not just the final body); editing `agent.py` triggers reload and the next request succeeds; SIGINT leaves **zero** surviving PIDs and both ports free. Matrix: `{python, node} × {nextjs_proxy, vite_proxy, none}` + Mode B, on Linux and macOS, plus a Windows smoke run.
+- **Docker:** `langctl dev --docker` → `langgraph up` on 8123, proxy retargets, thread state survives a container restart (proves the checkpointer).
 - **E2E (gated, real creds, nightly):** deploy to LangSmith Cloud + Vercel, smoke both URLs, confirm the browser never sees the API key (scan the client bundle), `rollback`, `destroy`, assert no orphans.
 - **`--dry-run` contract test:** every provider produces a full action plan with no network access.
 - **Manual:** the four §3/§10 journeys on a clean machine — including "no LangSmith plan, no Docker", which must never dead-end.

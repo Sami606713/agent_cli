@@ -1,6 +1,6 @@
 # Edge cases & preflight acceptance criteria
 
-Part of [`agentctl` — a Next.js-style CLI for building, running, and deploying LangChain agents](./PLAN.md).
+Part of [`langctl` — a Next.js-style CLI for building, running, and deploying LangChain agents](./PLAN.md).
 
 ## 7. Edge cases (acceptance criteria for `doctor`/`preflight`)
 
@@ -44,7 +44,7 @@ Part of [`agentctl` — a Next.js-style CLI for building, running, and deploying
 
 **Secrets & safety**
 - `LANGSMITH_API_KEY` is injected **server-side in the proxy route only** — never `NEXT_PUBLIC_*`. A lint rule in the template CI fails the build if a secret is prefixed for the browser.
-- Keyring first, `.env.local` fallback; `.gitignore` covers `.env*`, `.agentctl/`, `.langgraph_api/`.
+- Keyring first, `.env.local` fallback; `.gitignore` covers `.env*`, `.langctl/`, `.langgraph_api/`.
 - `destroy` requires typing the deployment name.
 - **Unrelated but urgent:** `/home/revnix/Desktop/research/github token ghp ….txt` holds a GitHub token in plaintext one directory above this repo. Revoke it.
 

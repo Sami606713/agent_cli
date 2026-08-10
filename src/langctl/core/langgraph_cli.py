@@ -57,7 +57,7 @@ def dev_command(
 ) -> list[str]:
     """Build the `langgraph dev` argv.
 
-    `--no-browser` is always passed: agentctl opens a single tab pointed at the
+    `--no-browser` is always passed: langctl opens a single tab pointed at the
     frontend, and letting the server open Studio too would open two.
     """
     cmd = [

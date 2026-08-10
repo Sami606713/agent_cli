@@ -1,13 +1,13 @@
 # LangChain platform research
 
-Part of [`agentctl` — a Next.js-style CLI for building, running, and deploying LangChain agents](./PLAN.md).
+Part of [`langctl` — a Next.js-style CLI for building, running, and deploying LangChain agents](./PLAN.md).
 
 ## 1. Context
 
 
 `agent_cli` is an empty repo. The goal: a CLI where one command scaffolds a production LangChain/LangGraph agent (backend, or backend + frontend), **one command runs the whole thing as a single app** — frontend and agent already talking to each other, like `next dev` — and one command deploys both, wired, to a cloud of the user's choice.
 
-The **unified-runtime requirement is the core of the product**, not a convenience. Today a user assembles it by hand: start `langgraph dev` in one terminal, start the UI in another, copy `http://localhost:2024` into an env var, hit CORS, fix CORS, then repeat the whole dance with a different URL after deploying. `agentctl` collapses that into `agentctl dev` and `agentctl deploy`.
+The **unified-runtime requirement is the core of the product**, not a convenience. Today a user assembles it by hand: start `langgraph dev` in one terminal, start the UI in another, copy `http://localhost:2024` into an env var, hit CORS, fix CORS, then repeat the whole dance with a different URL after deploying. `langctl` collapses that into `langctl dev` and `langctl deploy`.
 
 ### 1.1 The decisive research finding
 
@@ -42,8 +42,8 @@ Long timeouts (600s) are not incidental: agent runs are long, and a default 30s 
 | Fact | Consequence |
 |---|---|
 | `langgraph.json` is the universal contract (`graphs`, `dependencies`, `env`, `auth`, `store`, `http`, `ui`, `checkpointer`, `webhooks`, `base_image`, `image_distro`, `python_version`/`node_version`, `pip_installer`) | Every template exports a graph through it. The one invariant making all runtimes and deploy targets interchangeable. |
-| `langgraph dev`: no Docker, hot reload by default, port **2024**, health at `/ok`, OpenAPI at `/docs`, `--no-browser`, `--host`, `--port` | The backend half of `agentctl dev`. `--no-browser` is required — *we* own what opens. |
-| `langgraph up` = Docker, port 8123, `--watch` opt-in | The "production-like" local mode: `agentctl dev --docker`. |
+| `langgraph dev`: no Docker, hot reload by default, port **2024**, health at `/ok`, OpenAPI at `/docs`, `--no-browser`, `--host`, `--port` | The backend half of `langctl dev`. `--no-browser` is required — *we* own what opens. |
+| `langgraph up` = Docker, port 8123, `--watch` opt-in | The "production-like" local mode: `langctl dev --docker`. |
 | `langgraph build` / `dockerfile` / `deploy` (+ `deploy list/logs/delete/revisions`), `--deployment-type serverless\|dedicated` (or `dev\|prod` pre-Oct-2026 pricing) | We wrap, never reimplement. |
 | Deployment environments: Cloud (**Plus plan+**), Self-hosted control plane (**Enterprise**), Hybrid (**Enterprise**), **Standalone Agent Server** (Docker/Compose/K8s + your Postgres/Redis + license key) | Standalone is the "any cloud" path. Docs: **never** run standalone on serverless/scale-to-zero (task loss). |
 | Standalone env contract: `REDIS_URI`, `DATABASE_URI`, `LANGSMITH_API_KEY`, `LANGGRAPH_CLOUD_LICENSE_KEY`, optional `LANGSMITH_ENDPOINT` (no trailing slash), egress to `beacon.langchain.com`; shared PG/Redis needs distinct db name / db index | Exactly what provider adapters provision and validate. |

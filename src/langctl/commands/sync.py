@@ -1,4 +1,4 @@
-"""`agentctl sync` — regenerate derived files from agent.yaml."""
+"""`langctl sync` — regenerate derived files from agent.yaml."""
 
 from __future__ import annotations
 
@@ -40,7 +40,7 @@ def sync(
             console.print(f"    [dim]on disk  [/dim] {json.dumps(on_disk)}")
             console.print(f"    [dim]generated[/dim] {json.dumps(generated)}")
         console.print(
-            "\nEdit agent.yaml to match, or run [bold]agentctl sync --force[/bold] "
+            "\nEdit agent.yaml to match, or run [bold]langctl sync --force[/bold] "
             "to overwrite the file."
         )
         raise typer.Exit(1)

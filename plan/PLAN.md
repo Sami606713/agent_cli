@@ -1,10 +1,10 @@
-# `agentctl` — a Next.js-style CLI for building, running, and deploying LangChain agents
+# `langctl` — a Next.js-style CLI for building, running, and deploying LangChain agents
 
 ## 1. Context
 
 `agent_cli` is an empty repo. The goal: a CLI where one command scaffolds a production LangChain/LangGraph agent (backend, or backend + frontend), **one command runs the whole thing as a single app** — frontend and agent already talking to each other, like `next dev` — and one command deploys both, wired, to a cloud of the user's choice.
 
-The **unified-runtime requirement is the core of the product**, not a convenience. Today a user assembles it by hand: start `langgraph dev` in one terminal, start the UI in another, copy `http://localhost:2024` into an env var, hit CORS, fix CORS, then repeat the whole dance with a different URL after deploying. `agentctl` collapses that into `agentctl dev` and `agentctl deploy`.
+The **unified-runtime requirement is the core of the product**, not a convenience. Today a user assembles it by hand: start `langgraph dev` in one terminal, start the UI in another, copy `http://localhost:2024` into an env var, hit CORS, fix CORS, then repeat the whole dance with a different URL after deploying. `langctl` collapses that into `langctl dev` and `langctl deploy`.
 
 ### 1.1 The decisive research finding
 
@@ -39,8 +39,8 @@ Long timeouts (600s) are not incidental: agent runs are long, and a default 30s 
 | Fact | Consequence |
 |---|---|
 | `langgraph.json` is the universal contract (`graphs`, `dependencies`, `env`, `auth`, `store`, `http`, `ui`, `checkpointer`, `webhooks`, `base_image`, `image_distro`, `python_version`/`node_version`, `pip_installer`) | Every template exports a graph through it. The one invariant making all runtimes and deploy targets interchangeable. |
-| `langgraph dev`: no Docker, hot reload by default, port **2024**, health at `/ok`, OpenAPI at `/docs`, `--no-browser`, `--host`, `--port` | The backend half of `agentctl dev`. `--no-browser` is required — *we* own what opens. |
-| `langgraph up` = Docker, port 8123, `--watch` opt-in | The "production-like" local mode: `agentctl dev --docker`. |
+| `langgraph dev`: no Docker, hot reload by default, port **2024**, health at `/ok`, OpenAPI at `/docs`, `--no-browser`, `--host`, `--port` | The backend half of `langctl dev`. `--no-browser` is required — *we* own what opens. |
+| `langgraph up` = Docker, port 8123, `--watch` opt-in | The "production-like" local mode: `langctl dev --docker`. |
 | `langgraph build` / `dockerfile` / `deploy` (+ `deploy list/logs/delete/revisions`), `--deployment-type serverless\|dedicated` (or `dev\|prod` pre-Oct-2026 pricing) | We wrap, never reimplement. |
 | Deployment environments: Cloud (**Plus plan+**), Self-hosted control plane (**Enterprise**), Hybrid (**Enterprise**), **Standalone Agent Server** (Docker/Compose/K8s + your Postgres/Redis + license key) | Standalone is the "any cloud" path. Docs: **never** run standalone on serverless/scale-to-zero (task loss). |
 | Standalone env contract: `REDIS_URI`, `DATABASE_URI`, `LANGSMITH_API_KEY`, `LANGGRAPH_CLOUD_LICENSE_KEY`, optional `LANGSMITH_ENDPOINT` (no trailing slash), egress to `beacon.langchain.com`; shared PG/Redis needs distinct db name / db index | Exactly what provider adapters provision and validate. |
@@ -66,7 +66,7 @@ Visual builder; LangSmith replacement; hosted dashboard; billing; Terraform for 
 
 ## 3. The unified runtime — the heart of the design
 
-Two runtime modes. Both give the user *one command, one URL, frontend already talking to the agent*. `agent.yaml` picks one; `agentctl dev` behaves identically from the user's side.
+Two runtime modes. Both give the user *one command, one URL, frontend already talking to the agent*. `agent.yaml` picks one; `langctl dev` behaves identically from the user's side.
 
 ### Mode A — `proxy` (default; works with Python **or** JS agents)
 
@@ -86,7 +86,7 @@ Two processes, one origin. This is the generalized `js-langsmith` pattern.
                          Agent Server: /threads /runs /assistants /ok /info /docs
 ```
 
-`agentctl dev` supervises both:
+`langctl dev` supervises both:
 
 1. resolve `agent.yaml`, sync `langgraph.json`, load `.env.local`
 2. preflight: ports 2024/3000 free, deps installed, model key present
@@ -102,7 +102,7 @@ Next.js implementation: a catch-all route handler at `app/api/agent/[...path]/ro
 
 ### Mode B — `embedded` (JS only; literally one process)
 
-The `js-next` shape: the agent lives inside Next.js route handlers implementing the Agent Streaming Protocol. `agentctl dev` runs `next dev` and nothing else. No Agent Server, no port 2024, **no LangSmith plan required**, and `agentctl deploy` ships a single Vercel app. This is the answer for users with no LangSmith Plus, and the cheapest path to production.
+The `js-next` shape: the agent lives inside Next.js route handlers implementing the Agent Streaming Protocol. `langctl dev` runs `next dev` and nothing else. No Agent Server, no port 2024, **no LangSmith plan required**, and `langctl deploy` ships a single Vercel app. This is the answer for users with no LangSmith Plus, and the cheapest path to production.
 
 Trade-off surfaced honestly at scaffold time: Mode B has no durable Agent Server, so checkpointing, cron, background runs, and multi-replica SSE replay are yours to wire (Redis/Postgres checkpointer + shared session registry). Mode A gets all of it for free.
 
@@ -125,13 +125,13 @@ Python agent ⇒ Mode A, always. JS agent ⇒ ask.
 
 ```
 agent_cli/
-├─ pyproject.toml                    # agentctl = agentctl.main:app
-├─ src/agentctl/
+├─ pyproject.toml                    # langctl = langctl.main:app
+├─ src/langctl/
 │  ├─ main.py
 │  ├─ commands/                      # new dev build deploy env providers doctor logs rollback destroy eject sync add
 │  ├─ core/
 │  │  ├─ spec.py                     # AgentSpec (pydantic) ← single source of truth
-│  │  ├─ manifest.py                 # agent.yaml + .agentctl/state.json
+│  │  ├─ manifest.py                 # agent.yaml + .langctl/state.json
 │  │  ├─ render.py                   # Jinja2 template renderer
 │  │  ├─ supervisor.py               # ★ process supervisor: spawn, health-gate, log-mux, teardown
 │  │  ├─ health.py                   # /ok polling, port probing, readiness backoff
@@ -174,7 +174,7 @@ deploy:
 environments: [dev, staging, prod]
 ```
 
-`langgraph.json` is generated from this and kept in sync by `agentctl sync`, merging rather than clobbering hand edits (unknown keys preserved, drift reported, `--force` to overwrite owned keys).
+`langgraph.json` is generated from this and kept in sync by `langctl sync`, merging rather than clobbering hand edits (unknown keys preserved, drift reported, `--force` to overwrite owned keys).
 
 ### 4.2 Provider interface
 
@@ -195,7 +195,7 @@ class Provider(ABC):
     def logs / rollback / destroy(ctx)
 ```
 
-Discovery: built-ins + entry points `agentctl.providers` + a zero-Python declarative escape hatch (`providers.yaml` describing shell commands), so a user can add a custom cloud without forking.
+Discovery: built-ins + entry points `langctl.providers` + a zero-Python declarative escape hatch (`providers.yaml` describing shell commands), so a user can add a custom cloud without forking.
 
 ### 4.3 Deploy pipeline — deploy preserves the dev topology
 
@@ -209,7 +209,7 @@ preflight (auth, plan tier, binaries, capability matrix)
   → deploy frontend
   → smoke test: GET <api>/ok · POST a trivial run · GET <web>/ · assert the proxy
       route returns 200 from the browser origin  ← proves end-to-end wiring
-  → write .agentctl/state.json → print URLs + Studio link + rollback hint
+  → write .langctl/state.json → print URLs + Studio link + rollback hint
 ```
 
 The wiring step is the one everybody forgets by hand, and the reason a redeployed backend silently breaks a live frontend. Here it is automatic: if `api_url` changes, the frontend is redeployed too.
@@ -220,20 +220,20 @@ The wiring step is the one everybody forgets by hand, and the reason a redeploye
 
 | Command | Behavior |
 |---|---|
-| `agentctl new [name]` | Rich wizard → `agent.yaml`, renders backend (+frontend +proxy), `git init`, installs deps. `--yes` + flags for CI. |
-| **`agentctl dev`** | **The headline command.** §3. Flags: `--backend-only`, `--frontend-only`, `--port/--backend-port`, `--no-open`, `--docker` (uses `langgraph up` on 8123 for a production-like run), `--tunnel` (public URL for webhook/mobile testing). |
-| `agentctl studio` | Opens Studio against the running local server. |
-| `agentctl sync` | Regenerate `langgraph.json`, `.env.example`, proxy config, Dockerfile, CI from `agent.yaml`; report drift. |
-| `agentctl add tool\|frontend\|ui-component\|provider\|eval` | Idempotent additions. `add frontend` retrofits the proxy onto a backend-only project. |
-| `agentctl env set/pull/push/diff` | Per-environment env; push to provider secret stores; never committed. |
-| `agentctl build` | `langgraph build` + frontend build. |
-| `agentctl deploy [--env prod] [--backend-only] [--frontend-only] [--dry-run] [--resume]` | §4.3. |
-| `agentctl logs [--backend\|--frontend] [-f]`, `rollback`, `destroy` | Proxy to provider; `destroy` needs the typed name. |
-| `agentctl providers list/add/test` | Capability matrix; register/validate custom providers. |
-| `agentctl doctor` | python/node/docker/uv versions, `langgraph-cli` version compat, ports 2024/3000, API keys valid, plan tier, Docker daemon, provider auth. |
-| `agentctl eject` | Emit raw scripts/Dockerfile/Compose/workflows and drop the CLI. **Anti-lock-in is a feature.** |
+| `langctl new [name]` | Rich wizard → `agent.yaml`, renders backend (+frontend +proxy), `git init`, installs deps. `--yes` + flags for CI. |
+| **`langctl dev`** | **The headline command.** §3. Flags: `--backend-only`, `--frontend-only`, `--port/--backend-port`, `--no-open`, `--docker` (uses `langgraph up` on 8123 for a production-like run), `--tunnel` (public URL for webhook/mobile testing). |
+| `langctl studio` | Opens Studio against the running local server. |
+| `langctl sync` | Regenerate `langgraph.json`, `.env.example`, proxy config, Dockerfile, CI from `agent.yaml`; report drift. |
+| `langctl add tool\|frontend\|ui-component\|provider\|eval` | Idempotent additions. `add frontend` retrofits the proxy onto a backend-only project. |
+| `langctl env set/pull/push/diff` | Per-environment env; push to provider secret stores; never committed. |
+| `langctl build` | `langgraph build` + frontend build. |
+| `langctl deploy [--env prod] [--backend-only] [--frontend-only] [--dry-run] [--resume]` | §4.3. |
+| `langctl logs [--backend\|--frontend] [-f]`, `rollback`, `destroy` | Proxy to provider; `destroy` needs the typed name. |
+| `langctl providers list/add/test` | Capability matrix; register/validate custom providers. |
+| `langctl doctor` | python/node/docker/uv versions, `langgraph-cli` version compat, ports 2024/3000, API keys valid, plan tier, Docker daemon, provider auth. |
+| `langctl eject` | Emit raw scripts/Dockerfile/Compose/workflows and drop the CLI. **Anti-lock-in is a feature.** |
 
-Generated projects also carry plain `npm run dev` / `make dev` equivalents that call the same supervisor, so a teammate without `agentctl` installed can still run the app.
+Generated projects also carry plain `npm run dev` / `make dev` equivalents that call the same supervisor, so a teammate without `langctl` installed can still run the app.
 
 ---
 
@@ -286,7 +286,7 @@ Generated projects also carry plain `npm run dev` / `make dev` equivalents that 
 
 **Secrets & safety**
 - `LANGSMITH_API_KEY` is injected **server-side in the proxy route only** — never `NEXT_PUBLIC_*`. A lint rule in the template CI fails the build if a secret is prefixed for the browser.
-- Keyring first, `.env.local` fallback; `.gitignore` covers `.env*`, `.agentctl/`, `.langgraph_api/`.
+- Keyring first, `.env.local` fallback; `.gitignore` covers `.env*`, `.langctl/`, `.langgraph_api/`.
 - `destroy` requires typing the deployment name.
 - **Unrelated but urgent:** `/home/revnix/Desktop/research/github token ghp ….txt` holds a GitHub token in plaintext one directory above this repo. Revoke it.
 
@@ -296,14 +296,14 @@ Generated projects also carry plain `npm run dev` / `make dev` equivalents that 
 
 | Phase | Scope | Done when |
 |---|---|---|
-| **0. Skeleton** | Typer app, `AgentSpec`, manifest, renderer, errors, provider ABC, `doctor`. | `agentctl doctor` prints a full environment table. |
-| **1. ★ Unified runtime** | `supervisor.py`, `health.py`, proxy templates, `minimal` + `react_agent` Python backends, `nextjs_proxy` frontend, `agentctl new` + `agentctl dev`. | `agentctl new x && cd x && agentctl dev` → one URL, chat with the agent, edit `agent.py`, see hot reload, Ctrl-C leaves nothing running. |
-| **2. Deploy v1** | `langsmith_cloud` + `vercel`, wiring, smoke test, state, `logs`/`rollback`/`destroy`, CI. | One `agentctl deploy` → both halves live and wired; a backend-only redeploy still leaves the UI working. |
+| **0. Skeleton** | Typer app, `AgentSpec`, manifest, renderer, errors, provider ABC, `doctor`. | `langctl doctor` prints a full environment table. |
+| **1. ★ Unified runtime** | `supervisor.py`, `health.py`, proxy templates, `minimal` + `react_agent` Python backends, `nextjs_proxy` frontend, `langctl new` + `langctl dev`. | `langctl new x && cd x && langctl dev` → one URL, chat with the agent, edit `agent.py`, see hot reload, Ctrl-C leaves nothing running. |
+| **2. Deploy v1** | `langsmith_cloud` + `vercel`, wiring, smoke test, state, `logs`/`rollback`/`destroy`, CI. | One `langctl deploy` → both halves live and wired; a backend-only redeploy still leaves the UI working. |
 | **3. No-plan path** | Mode B `nextjs_embedded` + `compose_ssh` standalone provider. | A user with no LangSmith plan deploys end-to-end. |
 | **4. Breadth** | `rag`/`deep_agent`/`multi_agent`, generative UI (`ui` key), `vite_proxy`, `flyio`/`render`, `add *`, eval harness. | |
 | **5. Any cloud** | `ecs`/`cloudrun`/`k8s_helm` as reviewable Terraform/Helm emitters, plugin spec docs, `eject`. | A platform engineer adds an internal cloud without forking. |
 
-Phase 1 is the product. If `agentctl dev` isn't magic, nothing after it matters.
+Phase 1 is the product. If `langctl dev` isn't magic, nothing after it matters.
 
 ---
 
@@ -311,8 +311,8 @@ Phase 1 is the product. If `agentctl dev` isn't magic, nothing after it matters.
 
 - **Unit:** spec validation; `langgraph.json` merge/drift; wiring for both modes; capability matrix (serverless × standalone → blocked); supervisor lifecycle with fake processes (health gate, crash propagation, teardown, orphan reaping); proxy header injection and secret-leak lint.
 - **Golden-file:** snapshot every rendered template; generated projects must pass `ruff`/`eslint` and `mypy`/`tsc`.
-- **★ Runtime integration (the critical suite):** scaffold into a tmpdir, run `agentctl dev` against a **stub model server**, then assert — `:2024/ok` healthy; `GET :3000/` 200; `POST :3000/api/agent/threads` proxies through; a run **streams SSE through the proxy** with tokens arriving incrementally (not buffered — assert timing, not just the final body); editing `agent.py` triggers reload and the next request succeeds; SIGINT leaves **zero** surviving PIDs and both ports free. Matrix: `{python, node} × {nextjs_proxy, vite_proxy, none}` + Mode B, on Linux and macOS, plus a Windows smoke run.
-- **Docker:** `agentctl dev --docker` → `langgraph up` on 8123, proxy retargets, thread state survives a container restart (proves the checkpointer).
+- **★ Runtime integration (the critical suite):** scaffold into a tmpdir, run `langctl dev` against a **stub model server**, then assert — `:2024/ok` healthy; `GET :3000/` 200; `POST :3000/api/agent/threads` proxies through; a run **streams SSE through the proxy** with tokens arriving incrementally (not buffered — assert timing, not just the final body); editing `agent.py` triggers reload and the next request succeeds; SIGINT leaves **zero** surviving PIDs and both ports free. Matrix: `{python, node} × {nextjs_proxy, vite_proxy, none}` + Mode B, on Linux and macOS, plus a Windows smoke run.
+- **Docker:** `langctl dev --docker` → `langgraph up` on 8123, proxy retargets, thread state survives a container restart (proves the checkpointer).
 - **E2E (gated, real creds, nightly):** deploy to LangSmith Cloud + Vercel, smoke both URLs, confirm the browser never sees the API key (scan the client bundle), `rollback`, `destroy`, assert no orphans.
 - **`--dry-run` contract test:** every provider produces a full action plan with no network access.
 - **Manual:** the four §3/§10 journeys on a clean machine — including "no LangSmith plan, no Docker", which must never dead-end.

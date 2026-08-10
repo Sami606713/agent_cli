@@ -7,7 +7,7 @@
  *   2. `LANGSMITH_API_KEY` stays on the server. It is attached here and is never
  *      shipped to the browser. Never expose it via a `NEXT_PUBLIC_` variable.
  *   3. dev and production differ by one environment variable. Unset means the
- *      local `langgraph dev` server; in production `agentctl deploy` sets
+ *      local `langgraph dev` server; in production `langctl deploy` sets
  *      `AGENT_PROXY_TARGET` to the deployed Agent Server URL. No code changes.
  *
  * A `next.config` rewrite cannot replace this: rewrites cannot inject the auth
@@ -103,7 +103,7 @@ async function proxy(request: Request, path: string[]): Promise<Response> {
       {
         error: "agent_unreachable",
         message: `Could not reach the agent server at ${target()}.`,
-        hint: "Is it running? `agentctl dev` starts it automatically.",
+        hint: "Is it running? `langctl dev` starts it automatically.",
         detail: error instanceof Error ? error.message : String(error),
       },
       { status: 502 },

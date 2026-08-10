@@ -1,16 +1,16 @@
 #!/usr/bin/env bash
-# End-to-end check of `agentctl dev`:
+# End-to-end check of `langctl dev`:
 #   health gate → same-origin proxy → thread creation → clean teardown.
 set -u
-PROJECT="${AGENTCTL_E2E_PROJECT:?set AGENTCTL_E2E_PROJECT to a scaffolded project dir}"
-# Override if agentctl is not on PATH (e.g. AGENTCTL_BIN=/path/to/.venv/bin/agentctl).
-AGENTCTL="${AGENTCTL_BIN:-agentctl}"
+PROJECT="${LANGCTL_E2E_PROJECT:?set LANGCTL_E2E_PROJECT to a scaffolded project dir}"
+# Override if langctl is not on PATH (e.g. LANGCTL_BIN=/path/to/.venv/bin/langctl).
+LANGCTL="${LANGCTL_BIN:-langctl}"
 cd "$PROJECT"
 
 echo "ANTHROPIC_API_KEY=sk-ant-dummy-for-e2e" >> .env
 
-LOG=/tmp/agentctl-dev.log
-"$AGENTCTL" dev --no-open --strict-port > "$LOG" 2>&1 &
+LOG=/tmp/langctl-dev.log
+"$LANGCTL" dev --no-open --strict-port > "$LOG" 2>&1 &
 DEV_PID=$!
 echo "dev pid=$DEV_PID"
 

@@ -1,4 +1,4 @@
-"""`agentctl new` — scaffold a project."""
+"""`langctl new` — scaffold a project."""
 
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.prompt import Confirm, Prompt
 
-from ..core.errors import AgentctlError
+from ..core.errors import LangctlError
 from ..core.scaffold import scaffold
 from ..core.spec import AgentSpec
 
@@ -70,8 +70,8 @@ def new(
     """Create a new agent project."""
     if name is None:
         if yes:
-            raise AgentctlError(
-                "A project name is required with --yes", fix="agentctl new my-agent"
+            raise LangctlError(
+                "A project name is required with --yes", fix="langctl new my-agent"
             )
         name = Prompt.ask("Project name", default="my-agent")
     name = slugify(name)
@@ -110,7 +110,7 @@ def new(
 
     dest = (directory or Path.cwd() / name).resolve()
     if dest.exists() and any(dest.iterdir()):
-        raise AgentctlError(
+        raise LangctlError(
             f"{dest} already exists and is not empty",
             fix="Pick another name, or pass --dir to a fresh directory.",
         )
@@ -135,7 +135,7 @@ def new(
         Panel(
             f"[bold]1.[/bold] cd {rel}\n"
             f"[bold]2.[/bold] add your {spec.model.api_key_env} to [cyan].env[/cyan]\n"
-            f"[bold]3.[/bold] agentctl dev",
+            f"[bold]3.[/bold] langctl dev",
             title="[bold]next steps[/bold]",
             border_style="cyan",
             title_align="left",

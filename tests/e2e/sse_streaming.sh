@@ -43,7 +43,7 @@ python3 /tmp/sse_stub.py "$STUB_PORT" &
 STUB=$!
 sleep 1
 
-cd "${AGENTCTL_E2E_PROJECT:?set AGENTCTL_E2E_PROJECT}/web"
+cd "${LANGCTL_E2E_PROJECT:?set LANGCTL_E2E_PROJECT}/web"
 AGENT_PROXY_TARGET="http://127.0.0.1:$STUB_PORT" npx next dev --port "$WEB_PORT" > /tmp/sse-next.log 2>&1 &
 WEB=$!
 for i in $(seq 1 120); do curl -sf -o /dev/null "http://127.0.0.1:$WEB_PORT/" && break; sleep 1; done

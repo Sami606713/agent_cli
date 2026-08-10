@@ -3,8 +3,8 @@ import json
 import pytest
 from pydantic import ValidationError
 
-from agentctl.core.errors import SpecError
-from agentctl.core.spec import AgentSpec
+from langctl.core.errors import SpecError
+from langctl.core.spec import AgentSpec
 
 
 def spec(**kw) -> AgentSpec:

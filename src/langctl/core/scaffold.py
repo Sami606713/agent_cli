@@ -75,7 +75,7 @@ def merge_langgraph_config(spec: AgentSpec, existing: dict[str, Any]) -> dict[st
     """Overlay the keys we own onto an existing config, preserving the rest.
 
     Hand-added keys (`auth`, `dockerfile_lines`, `checkpointer`, custom `http`
-    settings…) must survive `agentctl sync`, or editing langgraph.json becomes a
+    settings…) must survive `langctl sync`, or editing langgraph.json becomes a
     trap.
     """
     merged = dict(existing)

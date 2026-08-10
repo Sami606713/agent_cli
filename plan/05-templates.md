@@ -1,6 +1,6 @@
 # Generated project templates
 
-Part of [`agentctl` — a Next.js-style CLI for building, running, and deploying LangChain agents](./PLAN.md).
+Part of [`langctl` — a Next.js-style CLI for building, running, and deploying LangChain agents](./PLAN.md).
 
 ## 6. What gets generated
 

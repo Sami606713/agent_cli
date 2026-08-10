@@ -84,7 +84,7 @@ def render_tree(
         dest: Destination directory; created if absent.
         context: Jinja context, also used for ``__placeholder__`` path segments.
         overwrite: When False, existing files are left alone and reported as
-            skipped. `agentctl add` relies on this to be non-destructive.
+            skipped. `langctl add` relies on this to be non-destructive.
     """
     src = Path(template)
     if not src.is_absolute():

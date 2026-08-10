@@ -6,8 +6,8 @@ subcommand is given, making the flag unreachable. These lock the entry points.
 
 from typer.testing import CliRunner
 
-from agentctl import __version__
-from agentctl.main import cli
+from langctl import __version__
+from langctl.main import cli
 
 runner = CliRunner()
 

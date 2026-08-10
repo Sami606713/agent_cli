@@ -1,4 +1,4 @@
-"""`agentctl doctor` — check the environment before it fails mid-command."""
+"""`langctl doctor` — check the environment before it fails mid-command."""
 
 from __future__ import annotations
 
@@ -105,14 +105,14 @@ def _port(port: int, role: str) -> Check:
         f"port {port}",
         WARN,
         f"in use by {holder}",
-        "`agentctl dev` will pick the next free port, or pass --strict-port to fail instead.",
+        "`langctl dev` will pick the next free port, or pass --strict-port to fail instead.",
     )
 
 
 def _config_check(root: Path) -> Check:
     """Validate langgraph.json using the real CLI, which is the authority."""
     if not (root / "langgraph.json").is_file():
-        return Check("langgraph.json", FAIL, "missing", "Run `agentctl sync`.")
+        return Check("langgraph.json", FAIL, "missing", "Run `langctl sync`.")
     try:
         langgraph = find_langgraph(root)
     except MissingDependency:
@@ -125,7 +125,7 @@ def _config_check(root: Path) -> Check:
         "langgraph.json",
         FAIL,
         (result.stderr or result.stdout).strip().splitlines()[-1][:120],
-        "Run `agentctl sync`, then `langgraph validate`.",
+        "Run `langctl sync`, then `langgraph validate`.",
     )
 
 
@@ -133,7 +133,7 @@ def _project_checks() -> list[Check]:
     try:
         root = find_project_root()
     except Exception:
-        return [Check("project", WARN, "not inside an agentctl project")]
+        return [Check("project", WARN, "not inside an langctl project")]
 
     checks = [Check("project", OK, str(root))]
     try:

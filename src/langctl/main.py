@@ -1,4 +1,4 @@
-"""agentctl — build, run, and deploy LangChain agents."""
+"""langctl — build, run, and deploy LangChain agents."""
 
 from __future__ import annotations
 
@@ -12,12 +12,12 @@ from .commands.dev import dev
 from .commands.doctor import doctor
 from .commands.new import new
 from .commands.sync import sync
-from .core.errors import AgentctlError
+from .core.errors import LangctlError
 
 console = Console()
 
 cli = typer.Typer(
-    name="agentctl",
+    name="langctl",
     help="Build, run, and deploy LangChain agents. Frontend and agent in one command.",
     add_completion=False,
     pretty_exceptions_show_locals=False,
@@ -31,14 +31,14 @@ cli.command("doctor")(doctor)
 
 # invoke_without_command is required for `--version`: Click does not run a
 # group's callback at all when no subcommand is present, so the flag would be
-# unreachable and `agentctl --version` would fail with "Missing command".
+# unreachable and `langctl --version` would fail with "Missing command".
 @cli.callback(invoke_without_command=True)
 def main(
     ctx: typer.Context,
     version: bool = typer.Option(False, "--version", help="Show the version and exit."),
 ) -> None:
     if version:
-        console.print(f"agentctl {__version__}")
+        console.print(f"langctl {__version__}")
         raise typer.Exit()
     if ctx.invoked_subcommand is None:
         console.print(ctx.get_help())
@@ -49,11 +49,11 @@ def app() -> None:
     """Console-script entry point.
 
     Anticipated failures are rendered as a panel with a fix rather than a
-    traceback; anything else is a bug in agentctl and keeps its traceback.
+    traceback; anything else is a bug in langctl and keeps its traceback.
     """
     try:
         cli()
-    except AgentctlError as error:
+    except LangctlError as error:
         error.render(console)
         sys.exit(error.exit_code)
     except KeyboardInterrupt:

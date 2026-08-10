@@ -1,4 +1,4 @@
-"""Process supervisor for `agentctl dev`.
+"""Process supervisor for `langctl dev`.
 
 Runs several long-lived child processes as one foreground unit:
 
@@ -11,7 +11,7 @@ Runs several long-lived child processes as one foreground unit:
 * teardown is guaranteed on any exit path — normal, exception, or Ctrl-C — and
   escalates SIGTERM → SIGKILL after a grace period.
 
-Nothing here is LangChain-specific; :mod:`agentctl.commands.dev` supplies the
+Nothing here is LangChain-specific; :mod:`langctl.commands.dev` supplies the
 commands and the health URLs.
 """
 

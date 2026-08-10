@@ -1,7 +1,7 @@
 """Typed errors.
 
-Every failure the user can hit should be an ``AgentctlError`` carrying a *fix* —
-the concrete next command or edit. Bare tracebacks are for bugs in agentctl, not
+Every failure the user can hit should be an ``LangctlError`` carrying a *fix* —
+the concrete next command or edit. Bare tracebacks are for bugs in langctl, not
 for conditions we anticipated.
 """
 
@@ -11,7 +11,7 @@ from rich.console import Console
 from rich.panel import Panel
 
 
-class AgentctlError(Exception):
+class LangctlError(Exception):
     """Base class for anticipated failures.
 
     Args:
@@ -39,17 +39,17 @@ class AgentctlError(Exception):
         console.print(Panel("\n".join(body), border_style="red", title="error", title_align="left"))
 
 
-class ProjectNotFound(AgentctlError):
+class ProjectNotFound(LangctlError):
     """No agent.yaml in this directory or any parent."""
 
     def __init__(self, start: str):
         super().__init__(
-            f"No agentctl project found at or above {start}",
-            fix="Run `agentctl new <name>` to create one, or cd into an existing project.",
+            f"No langctl project found at or above {start}",
+            fix="Run `langctl new <name>` to create one, or cd into an existing project.",
         )
 
 
-class PortInUse(AgentctlError):
+class PortInUse(LangctlError):
     def __init__(self, port: int, role: str, holder: str | None = None):
         detail = f"Port {port} is held by: {holder}" if holder else None
         super().__init__(
@@ -62,7 +62,7 @@ class PortInUse(AgentctlError):
         )
 
 
-class BackendStartFailed(AgentctlError):
+class BackendStartFailed(LangctlError):
     """The Agent Server never became healthy.
 
     The backend's own output is the useful part here, so it is always attached:
@@ -72,12 +72,12 @@ class BackendStartFailed(AgentctlError):
     def __init__(self, reason: str, log_tail: str | None = None):
         super().__init__(
             f"The agent server failed to start: {reason}",
-            fix="Check the agent log above. Run `agentctl doctor` to verify your environment.",
+            fix="Check the agent log above. Run `langctl doctor` to verify your environment.",
             detail=log_tail,
         )
 
 
-class MissingDependency(AgentctlError):
+class MissingDependency(LangctlError):
     def __init__(self, binary: str, install: str):
         super().__init__(
             f"Required program not found: {binary}",
@@ -85,8 +85,8 @@ class MissingDependency(AgentctlError):
         )
 
 
-class SpecError(AgentctlError):
+class SpecError(LangctlError):
     """agent.yaml is malformed or internally inconsistent."""
 
     def __init__(self, message: str, fix: str | None = None):
-        super().__init__(message, fix=fix or "Edit agent.yaml, then run `agentctl sync`.")
+        super().__init__(message, fix=fix or "Edit agent.yaml, then run `langctl sync`.")

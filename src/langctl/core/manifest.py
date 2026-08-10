@@ -3,9 +3,9 @@
 Two files, with a firm split:
 
 ``agent.yaml``            user-owned, committed, human-edited. The spec.
-``.agentctl/state.json``  tool-owned, gitignored, machine-written. Deploy results.
+``.langctl/state.json``  tool-owned, gitignored, machine-written. Deploy results.
 
-Secrets go in neither — see :mod:`agentctl.core.secrets`.
+Secrets go in neither — see :mod:`langctl.core.secrets`.
 """
 
 from __future__ import annotations
@@ -22,7 +22,7 @@ from .errors import ProjectNotFound
 from .spec import AgentSpec
 
 SPEC_FILENAME = "agent.yaml"
-STATE_DIR = ".agentctl"
+STATE_DIR = ".langctl"
 STATE_FILENAME = "state.json"
 
 

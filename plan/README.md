@@ -1,4 +1,4 @@
-# `agentctl` — plan
+# `langctl` — plan
 
 A CLI that scaffolds a production LangChain/LangGraph agent, runs frontend + agent together with
 **one command** (like `next dev`), and deploys both — wired to each other — with one more.
@@ -9,7 +9,7 @@ Start with **[PLAN.md](./PLAN.md)** (the whole thing), or jump to a part:
 |---|---|
 | [PLAN.md](./PLAN.md) | The complete plan. |
 | [01-research-langchain.md](./01-research-langchain.md) | What the LangChain platform actually gives us, verified against the docs — and the `js-langsmith` cookbook pattern this design generalizes. |
-| [02-unified-runtime.md](./02-unified-runtime.md) | **The core.** Mode A (proxy) and Mode B (embedded); the spec `agentctl dev` implements. |
+| [02-unified-runtime.md](./02-unified-runtime.md) | **The core.** Mode A (proxy) and Mode B (embedded); the spec `langctl dev` implements. |
 | [03-architecture.md](./03-architecture.md) | Repo layout, `AgentSpec`/`agent.yaml`, provider interface, deploy pipeline. |
 | [04-commands.md](./04-commands.md) | Every command and flag. |
 | [05-templates.md](./05-templates.md) | What a generated project contains, backend and frontend. |
@@ -26,5 +26,5 @@ Start with **[PLAN.md](./PLAN.md)** (the whole thing), or jump to a part:
 
 ## Build order
 
-Phase 1 (`agentctl new` + `agentctl dev`, the unified runtime) is the product.
+Phase 1 (`langctl new` + `langctl dev`, the unified runtime) is the product.
 If `dev` isn't magic, nothing after it matters.

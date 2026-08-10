@@ -206,7 +206,7 @@ class AgentSpec(BaseModel):
 
     @staticmethod
     def owned_keys() -> set[str]:
-        """Keys `agentctl sync` may rewrite. Everything else is the user's."""
+        """Keys `langctl sync` may rewrite. Everything else is the user's."""
         return {
             "dependencies",
             "python_version",

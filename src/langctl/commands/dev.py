@@ -1,4 +1,4 @@
-"""`agentctl dev` — run the agent and the frontend as one application."""
+"""`langctl dev` — run the agent and the frontend as one application."""
 
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
-from ..core.errors import AgentctlError, BackendStartFailed, PortInUse
+from ..core.errors import BackendStartFailed, LangctlError, PortInUse
 from ..core.health import describe_port_holder, find_free_port, is_port_free
 from ..core.langgraph_cli import dev_command, find_langgraph, up_command
 from ..core.manifest import Project
@@ -93,18 +93,18 @@ def dev(
     spec = project.spec
 
     if backend_only and frontend_only:
-        raise AgentctlError("--backend-only and --frontend-only are mutually exclusive")
+        raise LangctlError("--backend-only and --frontend-only are mutually exclusive")
 
     has_frontend = spec.frontend.enabled and spec.frontend.kind != "none" and not backend_only
     wants_backend = spec.uses_agent_server and not frontend_only
 
     if has_frontend and not project.frontend_dir.is_dir():
-        raise AgentctlError(
+        raise LangctlError(
             f"agent.yaml enables a frontend but {project.frontend_dir} does not exist",
-            fix="Run `agentctl add frontend`, or set frontend.enabled: false in agent.yaml.",
+            fix="Run `langctl add frontend`, or set frontend.enabled: false in agent.yaml.",
         )
     if has_frontend and not (project.frontend_dir / "node_modules").is_dir():
-        raise AgentctlError(
+        raise LangctlError(
             "Frontend dependencies are not installed",
             fix=f"cd {project.frontend_dir.name} && npm install",
         )
@@ -149,7 +149,7 @@ def dev(
         )
 
     if not specs:
-        raise AgentctlError(
+        raise LangctlError(
             "Nothing to run",
             fix="Check `mode` and `frontend.enabled` in agent.yaml.",
         )
@@ -167,9 +167,9 @@ def dev(
             except StartupFailure as failure:
                 raise BackendStartFailed(failure.reason, failure.process.log_tail()) from failure
             except FileNotFoundError as exc:
-                raise AgentctlError(
+                raise LangctlError(
                     str(exc),
-                    fix="Install the missing tool, then run `agentctl doctor`.",
+                    fix="Install the missing tool, then run `langctl doctor`.",
                 ) from exc
 
         console.print(_summary(spec.name, web_url, api_url, docker))

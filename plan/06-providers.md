@@ -1,6 +1,6 @@
 # Deploy providers & plugin spec
 
-Part of [`agentctl` — a Next.js-style CLI for building, running, and deploying LangChain agents](./PLAN.md).
+Part of [`langctl` — a Next.js-style CLI for building, running, and deploying LangChain agents](./PLAN.md).
 
 v1 ships `langsmith_cloud` (backend) + `vercel` (frontend). Everything else is added behind the same
 interface; Phase 5 adds `ecs`/`cloudrun`/`k8s_helm` as reviewable Terraform/Helm emitters rather than
@@ -26,7 +26,7 @@ class Provider(ABC):
     def logs / rollback / destroy(ctx)
 ```
 
-Discovery: built-ins + entry points `agentctl.providers` + a zero-Python declarative escape hatch (`providers.yaml` describing shell commands), so a user can add a custom cloud without forking.
+Discovery: built-ins + entry points `langctl.providers` + a zero-Python declarative escape hatch (`providers.yaml` describing shell commands), so a user can add a custom cloud without forking.
 
 ### 4.3 Deploy pipeline — deploy preserves the dev topology
 
@@ -40,7 +40,7 @@ preflight (auth, plan tier, binaries, capability matrix)
   → deploy frontend
   → smoke test: GET <api>/ok · POST a trivial run · GET <web>/ · assert the proxy
       route returns 200 from the browser origin  ← proves end-to-end wiring
-  → write .agentctl/state.json → print URLs + Studio link + rollback hint
+  → write .langctl/state.json → print URLs + Studio link + rollback hint
 ```
 
 The wiring step is the one everybody forgets by hand, and the reason a redeployed backend silently breaks a live frontend. Here it is automatic: if `api_url` changes, the frontend is redeployed too.
