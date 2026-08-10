@@ -19,7 +19,6 @@ console = Console()
 cli = typer.Typer(
     name="agentctl",
     help="Build, run, and deploy LangChain agents. Frontend and agent in one command.",
-    no_args_is_help=True,
     add_completion=False,
     pretty_exceptions_show_locals=False,
 )
@@ -30,12 +29,19 @@ cli.command("sync")(sync)
 cli.command("doctor")(doctor)
 
 
-@cli.callback()
+# invoke_without_command is required for `--version`: Click does not run a
+# group's callback at all when no subcommand is present, so the flag would be
+# unreachable and `agentctl --version` would fail with "Missing command".
+@cli.callback(invoke_without_command=True)
 def main(
+    ctx: typer.Context,
     version: bool = typer.Option(False, "--version", help="Show the version and exit."),
 ) -> None:
     if version:
         console.print(f"agentctl {__version__}")
+        raise typer.Exit()
+    if ctx.invoked_subcommand is None:
+        console.print(ctx.get_help())
         raise typer.Exit()
 
 
