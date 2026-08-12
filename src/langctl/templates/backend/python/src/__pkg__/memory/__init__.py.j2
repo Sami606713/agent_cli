@@ -1,0 +1,15 @@
+"""Memory wiring.
+
+Two independent things, deliberately kept apart:
+
+* **short-term** (`checkpointer`) — the messages in one thread
+* **long-term** (`store`) — facts that outlive every thread
+
+Both are opened by the Agent Server via `langgraph.json` when this project owns
+them, so their lifetime matches the server's rather than a module import.
+"""
+
+from {{ pkg }}.memory.checkpointer import get_checkpointer
+from {{ pkg }}.memory.store import generate_store, generate_sync_store
+
+__all__ = ["get_checkpointer", "generate_store", "generate_sync_store"]

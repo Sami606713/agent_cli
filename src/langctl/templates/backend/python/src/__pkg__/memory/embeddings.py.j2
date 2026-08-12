@@ -1,0 +1,97 @@
+"""Embeddings for semantic memory search.
+
+Isolated in one file on purpose: switching how vectors are produced should touch
+nothing else, and `dims` must live next to the model that determines it. A
+`dims` mismatch cannot be corrected later without re-embedding every item.
+
+Mode for this project: **{{ embedding_mode }}**
+Model: {{ embedding_identifier }} ({{ embedding_dims }} dimensions)
+"""
+
+from __future__ import annotations
+
+import asyncio
+from collections.abc import Sequence
+from functools import lru_cache
+
+#: Must match the model's true output width, and the value in the store index.
+DIMS = {{ embedding_dims }}
+
+{% if embedding_mode == "provider" %}
+
+@lru_cache(maxsize=1)
+def _model():
+    """Build the embeddings client once.
+
+    Lazy so that importing this module — which the Agent Server does at
+    startup — does not construct a client or read credentials until something
+    actually embeds.
+    """
+    from langchain.embeddings import init_embeddings
+
+    return init_embeddings("{{ embedding_identifier }}")
+
+
+def embed_sync(texts: Sequence[str]) -> list[list[float]]:
+    return _model().embed_documents(list(texts))
+
+
+async def embed_async(texts: Sequence[str]) -> list[list[float]]:
+    return await _model().aembed_documents(list(texts))
+
+{% elif embedding_mode == "local" %}
+
+@lru_cache(maxsize=1)
+def _model():
+    """Load the sentence-transformers model once, on first use.
+
+    Deliberately lazy. Constructing this at import time would download model
+    weights and pull torch into memory every time the server starts, and the
+    Agent Server imports this module during startup — so an eager model turns
+    every cold start into a multi-hundred-megabyte download.
+    """
+    from sentence_transformers import SentenceTransformer
+
+    # trust_remote_code executes code from the model repo. Required by some
+    # models (including nomic-embed); review the repo before changing this.
+    return SentenceTransformer("{{ embedding_identifier }}", trust_remote_code=True)
+
+
+def embed_sync(texts: Sequence[str]) -> list[list[float]]:
+    vectors = _model().encode(list(texts))
+    return vectors.tolist() if hasattr(vectors, "tolist") else [list(v) for v in vectors]
+
+
+async def embed_async(texts: Sequence[str]) -> list[list[float]]:
+    """Embed without blocking the event loop.
+
+    `encode()` is CPU-bound and can take hundreds of milliseconds. Calling it
+    directly from async code stalls every other in-flight request on the
+    server, so it runs in a worker thread.
+    """
+    return await asyncio.to_thread(embed_sync, texts)
+
+{% else %}
+
+def embed_sync(texts: Sequence[str]) -> list[list[float]]:
+    """Return one vector of length DIMS per input string.
+
+    Replace this with your own implementation. It must return exactly DIMS
+    floats per text — the store enforces the width on write.
+    """
+    raise NotImplementedError(
+        "Custom embeddings selected but not implemented. "
+        "Fill in embed_sync (and embed_async) in this file."
+    )
+
+
+async def embed_async(texts: Sequence[str]) -> list[list[float]]:
+    """Async variant.
+
+    If your implementation is CPU-bound rather than I/O-bound, wrap it with
+    `asyncio.to_thread(embed_sync, texts)` instead of awaiting directly, or it
+    will block the server's event loop.
+    """
+    return await asyncio.to_thread(embed_sync, texts)
+
+{% endif %}

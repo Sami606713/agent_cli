@@ -15,28 +15,18 @@ from __future__ import annotations
 from langchain.agents import create_agent
 
 from {{ pkg }}.config import settings
+from {{ pkg }}.memory import get_checkpointer
 from {{ pkg }}.prompts import SYSTEM_PROMPT
 from {{ pkg }}.tools import TOOLS
 
-
-def _checkpointer():
-    """Pick a checkpointer for the current environment.
-
-    In production the Agent Server injects a managed Postgres checkpointer, so
-    returning None here is correct — passing our own would override it. Locally
-    we use an in-memory saver so threads survive within a `langctl dev` session.
-    """
-    if settings.is_server_managed:
-        return None
-    from langgraph.checkpoint.memory import InMemorySaver
-
-    return InMemorySaver()
-
+# Long-term memory is *not* constructed here. The Agent Server opens it from
+# `store.path` in langgraph.json and injects it as `runtime.store`, so its
+# lifetime matches the server's rather than this module's import.
 
 graph = create_agent(
     model=settings.model_identifier,
     tools=TOOLS,
     system_prompt=SYSTEM_PROMPT,
-    checkpointer=_checkpointer(),
+    checkpointer=get_checkpointer(),
     name="{{ name }}",
 )

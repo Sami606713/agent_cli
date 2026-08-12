@@ -7,6 +7,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-08-12
+
+### Added
+
+- **Long-term memory, on by default, with no services to run.** Generated
+  projects ship a `memory/` package backed by SQLite and wired through
+  `store.path` in `langgraph.json`, plus `save_memory` / `recall_memory` tools
+  namespaced per user.
+- Embeddings in three modes for semantic search (off by default): `provider`
+  (hosted API), `local` (sentence-transformers, no key), and `custom` (your own
+  function). `dims` is derived from the model, because a wrong width cannot be
+  corrected without re-embedding everything.
+- Dependency fan-out: enabling a feature adds its package to `pyproject.toml`
+  and its key to `.env.example`. A missing package is a startup failure that
+  `langgraph validate` reports as valid.
+- `tools/` and `prompts/` are now packages, so adding a tool never touches
+  agent wiring.
+- `tests/e2e/memory_persistence.sh` — writes a memory, kills the server's whole
+  process group, restarts, and reads it back.
+
+### Changed
+
+- `memory` in `agent.yaml` is now `{short_term, long_term}`. The 0.2.0 shape
+  (`checkpointer`/`store`/`semantic_search`) still loads and is migrated.
+- `data/` and `*.sqlite` are gitignored — those files hold real conversations.
+
+### Notes
+
+Why the two memories have opposite defaults: verified against a real restart,
+`langgraph dev` keeps the long-term store **in process** and loses every item on
+exit, so overriding it is a strict gain. The checkpointer is the reverse — the
+server manages threads well, and a custom one lacking `adelete_for_runs` stops
+cleaning up checkpoints from cancelled runs. So long-term memory is ours by
+default; short-term stays server-managed unless asked for.
+
+
 ## [0.2.0] - 2026-08-11
 
 ### Added
@@ -84,6 +120,7 @@ application.
   `SIG_IGN` from non-interactive shells, so `except KeyboardInterrupt` never
   fired. Both left `langgraph dev` and `next dev` orphaned holding their ports.
 
-[Unreleased]: https://github.com/Sami606713/agent_cli/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/Sami606713/agent_cli/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/Sami606713/agent_cli/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/Sami606713/agent_cli/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/Sami606713/agent_cli/releases/tag/v0.1.0

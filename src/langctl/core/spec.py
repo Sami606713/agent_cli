@@ -68,10 +68,144 @@ class ModelSpec(BaseModel):
         }[self.provider]
 
 
-class MemorySpec(BaseModel):
-    checkpointer: Literal["memory", "postgres", "sqlite", "redis"] = "postgres"
-    store: Literal["none", "memory", "postgres"] = "postgres"
+MemoryBackend = Literal["sqlite", "postgres", "memory"]
+
+#: Output dimensions per embedding model. A mismatch is unrecoverable — there is
+#: no re-embedding tooling — so dims is derived rather than left to the user.
+#: Values come from provider documentation, not from a live call.
+EMBEDDING_DIMS: dict[str, int] = {
+    "openai:text-embedding-3-small": 1536,
+    "openai:text-embedding-3-large": 3072,
+    "openai:text-embedding-ada-002": 1536,
+    "cohere:embed-english-v3.0": 1024,
+    "cohere:embed-multilingual-v3.0": 1024,
+    "mistralai:mistral-embed": 1024,
+    "google_vertexai:text-embedding-004": 768,
+    "ollama:nomic-embed-text": 768,
+    "nomic-ai/nomic-embed-text-v1.5": 768,
+    "sentence-transformers/all-MiniLM-L6-v2": 384,
+}
+
+#: Chat provider → sensible embeddings provider. Anthropic ships no embeddings
+#: API at all, so choosing it means taking on a second vendor.
+EMBEDDING_PROVIDER_FOR_CHAT: dict[str, str] = {
+    "openai": "openai",
+    "google": "google_vertexai",
+    "bedrock": "bedrock",
+    "ollama": "ollama",
+    "anthropic": "openai",
+}
+
+
+class EmbeddingsSpec(BaseModel):
+    """How vectors are produced when semantic search is on.
+
+    Three modes because the trade-offs genuinely differ: a hosted API (key and
+    per-item cost), a local model (no key, but pulls torch), or your own
+    function (no assumptions).
+    """
+
+    mode: Literal["provider", "local", "custom"] = "provider"
+    provider: str = "openai"
+    model: str = "text-embedding-3-small"
+    dims: int | None = None
+    #: JSON fields to embed; "$" means the whole document.
+    fields: list[str] = Field(default_factory=lambda: ["$"])
+
+    @property
+    def identifier(self) -> str:
+        return self.model if self.mode == "local" else f"{self.provider}:{self.model}"
+
+    @property
+    def api_key_env(self) -> str | None:
+        """Env var this embedding provider needs, if any."""
+        if self.mode != "provider":
+            return None  # local models and custom functions need no key
+        return {
+            "openai": "OPENAI_API_KEY",
+            "cohere": "COHERE_API_KEY",
+            "mistralai": "MISTRAL_API_KEY",
+            "google_vertexai": "GOOGLE_APPLICATION_CREDENTIALS",
+        }.get(self.provider)
+
+    @model_validator(mode="after")
+    def _resolve_dims(self) -> EmbeddingsSpec:
+        if self.dims is None:
+            resolved = EMBEDDING_DIMS.get(self.identifier)
+            if resolved is None:
+                raise ValueError(
+                    f"dims is required for embedding model {self.identifier!r}: it is not "
+                    "in the known-dimensions table. A wrong value cannot be corrected "
+                    "later without re-embedding every stored item."
+                )
+            self.dims = resolved
+        return self
+
+
+class ShortTermMemorySpec(BaseModel):
+    """Thread state — the messages inside one conversation.
+
+    Defaults to ``server``: let the Agent Server manage checkpoints. Unlike the
+    store, overriding this *loses* capability — the server warns that a custom
+    checkpointer without ``adelete_for_runs`` cannot clean up checkpoints from
+    cancelled runs, so ``multitask_strategy="rollback"`` leaves stale state.
+    Choose sqlite/postgres only when thread history must outlive the process.
+    """
+
+    backend: Literal["server", "sqlite", "postgres", "memory"] = "server"
+    path: str = "data/checkpoints.sqlite"
+
+    @property
+    def is_managed(self) -> bool:
+        return self.backend in ("server", "memory")
+
+
+class LongTermMemorySpec(BaseModel):
+    """Facts that outlive any single thread.
+
+    On by default. Verified against a real restart: with no explicit store,
+    `langgraph dev` keeps long-term memory in process and loses all of it.
+    """
+
+    enabled: bool = True
+    backend: MemoryBackend = "sqlite"
+    path: str = "data/memory.sqlite"
     semantic_search: bool = False
+    embeddings: EmbeddingsSpec = Field(default_factory=EmbeddingsSpec)
+
+
+class MemorySpec(BaseModel):
+    short_term: ShortTermMemorySpec = Field(default_factory=ShortTermMemorySpec)
+    long_term: LongTermMemorySpec = Field(default_factory=LongTermMemorySpec)
+
+    @model_validator(mode="before")
+    @classmethod
+    def _migrate_flat_shape(cls, data: object) -> object:
+        """Accept the 0.2.0 layout so existing projects keep loading.
+
+        old: {checkpointer, store, semantic_search}
+        new: {short_term: {...}, long_term: {...}}
+        """
+        if not isinstance(data, dict) or "short_term" in data or "long_term" in data:
+            return data
+        if not ({"checkpointer", "store", "semantic_search"} & set(data)):
+            return data
+
+        legacy_checkpointer = data.get("checkpointer", "sqlite")
+        legacy_store = data.get("store", "sqlite")
+        return {
+            "short_term": {
+                # 0.2.0 never emitted checkpointer.path, so those projects were
+                # always server-managed. Preserve that rather than silently
+                # switching them onto a custom checkpointer.
+                "backend": "memory" if legacy_checkpointer == "memory" else "server"
+            },
+            "long_term": {
+                "enabled": legacy_store != "none",
+                "backend": "memory" if legacy_store == "memory" else "sqlite",
+                "semantic_search": bool(data.get("semantic_search", False)),
+            },
+        }
 
 
 class FrontendSpec(BaseModel):
@@ -200,13 +334,22 @@ class AgentSpec(BaseModel):
             cfg["graphs"] = {self.graph_id: "./src/agent/index.ts:graph"}
         cfg["env"] = ".env"
 
-        if self.memory.store != "none" and self.memory.semantic_search:
-            cfg["store"] = {
-                "index": {
-                    "embed": "openai:text-embedding-3-small",
-                    "dims": 1536,
-                    "fields": ["$"],
-                }
+        # Long-term memory is wired through `store.path`, not `store.index`.
+        #
+        # Verified against a real restart: with no `store` key, `langgraph dev`
+        # holds the store in process and loses every memory when it exits.
+        # Pointing `path` at our own context manager is what makes it durable.
+        # It also *replaces* the deployed server's managed Postgres store, so we
+        # only emit it when the project actually owns its store.
+        if self.memory.long_term.enabled and self.memory.long_term.backend != "memory":
+            cfg["store"] = {"path": f"./src/{self.package_name}/memory/store.py:generate_store"}
+
+        # Short-term is the opposite trade-off: the server manages threads well,
+        # and a custom checkpointer loses adelete_for_runs. Only override when
+        # the project explicitly asked for durable local thread history.
+        if not self.memory.short_term.is_managed:
+            cfg["checkpointer"] = {
+                "path": f"./src/{self.package_name}/memory/checkpointer.py:generate_checkpointer"
             }
 
         if self.frontend.generative_ui and self.runtime == "node":
@@ -233,6 +376,7 @@ class AgentSpec(BaseModel):
             "graphs",
             "env",
             "store",
+            "checkpointer",
             "ui",
             "http",
         }

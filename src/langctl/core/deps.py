@@ -1,0 +1,91 @@
+"""Feature → package and env-var mapping.
+
+A feature that changes generated code almost always needs a dependency too, and
+a missing one is a *boot* failure the config validator does not catch: enabling
+semantic search without the embeddings package makes the Agent Server exit
+during startup while `langgraph validate` still reports the config as valid.
+
+Keeping the mapping here means a template and its requirements cannot drift.
+"""
+
+from __future__ import annotations
+
+from .spec import AgentSpec
+
+#: Chat model provider → package supplying it.
+MODEL_PACKAGES: dict[str, str] = {
+    "anthropic": "langchain-anthropic>=1.0",
+    "openai": "langchain-openai>=1.0",
+    "google": "langchain-google-genai>=2.0",
+    "bedrock": "langchain-aws>=1.0",
+    "ollama": "langchain-ollama>=1.0",
+}
+
+#: Memory backend → package supplying both its saver and its store.
+MEMORY_PACKAGES: dict[str, str | None] = {
+    "sqlite": "langgraph-checkpoint-sqlite>=3.0",
+    "postgres": "langgraph-checkpoint-postgres>=3.0",
+    "memory": None,  # ships with langgraph
+}
+
+#: Embeddings provider → package.
+EMBEDDING_PACKAGES: dict[str, str] = {
+    "openai": "langchain-openai>=1.0",
+    "cohere": "langchain-cohere>=1.0",
+    "mistralai": "langchain-mistralai>=1.0",
+    "google_vertexai": "langchain-google-vertexai>=3.0",
+    "ollama": "langchain-ollama>=1.0",
+    "bedrock": "langchain-aws>=1.0",
+}
+
+#: Local embeddings pull the whole torch stack — multiple GB. Surfaced in the
+#: wizard rather than discovered during a slow first install.
+LOCAL_EMBEDDING_PACKAGE = "sentence-transformers>=5.0"
+
+
+def runtime_packages(spec: AgentSpec) -> list[str]:
+    """Third-party packages the generated project needs, deduplicated."""
+    packages: list[str] = ["langchain>=1.0", "langgraph>=1.0"]
+
+    provider_package = MODEL_PACKAGES.get(spec.model.provider)
+    if provider_package:
+        packages.append(provider_package)
+
+    short_term = MEMORY_PACKAGES.get(spec.memory.short_term.backend)
+    if short_term:
+        packages.append(short_term)
+
+    if spec.memory.long_term.enabled:
+        long_term = MEMORY_PACKAGES.get(spec.memory.long_term.backend)
+        if long_term:
+            packages.append(long_term)
+
+        if spec.memory.long_term.semantic_search:
+            embeddings = spec.memory.long_term.embeddings
+            if embeddings.mode == "local":
+                packages.append(LOCAL_EMBEDDING_PACKAGE)
+            elif embeddings.mode == "provider":
+                embedding_package = EMBEDDING_PACKAGES.get(embeddings.provider)
+                if embedding_package:
+                    packages.append(embedding_package)
+
+    # Preserve order while removing duplicates: the model and embedding
+    # providers are frequently the same package.
+    return list(dict.fromkeys(packages))
+
+
+def required_env_vars(spec: AgentSpec) -> dict[str, str]:
+    """Env var → why it is needed. Drives .env.example and `langctl doctor`."""
+    required = {spec.model.api_key_env: f"chat model ({spec.model.identifier})"}
+
+    if spec.memory.short_term.backend == "postgres" or (
+        spec.memory.long_term.enabled and spec.memory.long_term.backend == "postgres"
+    ):
+        required["POSTGRES_URI"] = "postgres memory backend"
+
+    if spec.memory.long_term.enabled and spec.memory.long_term.semantic_search:
+        key = spec.memory.long_term.embeddings.api_key_env
+        if key:
+            required[key] = f"embeddings ({spec.memory.long_term.embeddings.identifier})"
+
+    return required

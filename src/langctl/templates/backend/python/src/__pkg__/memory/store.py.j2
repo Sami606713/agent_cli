@@ -1,0 +1,134 @@
+"""Long-term memory — facts that outlive any single conversation.
+
+`langgraph.json` points at `generate_store` below. The Agent Server opens it on
+startup and closes it on shutdown, so the connection lifetime matches the
+server's.
+
+Why this file exists at all: without an explicit store, the local dev server
+keeps long-term memory in process and loses every item when it restarts. This
+makes it durable.
+
+One consequence worth knowing — when a custom store is configured it *replaces*
+the store a deployed LangSmith server would otherwise manage for you, including
+its pgvector search and TTL sweeping. Those become this file's responsibility.
+"""
+
+from __future__ import annotations
+
+import contextlib
+import logging
+import os
+from collections.abc import AsyncIterator, Iterator
+from pathlib import Path
+
+{% if long_term_backend == "postgres" %}
+from langgraph.store.postgres import PostgresStore
+from langgraph.store.postgres.aio import AsyncPostgresStore
+{% elif long_term_backend == "sqlite" %}
+from langgraph.store.sqlite import AsyncSqliteStore, SqliteStore
+{% else %}
+from langgraph.store.memory import InMemoryStore
+{% endif %}
+{% if semantic_search %}
+from langgraph.store.base import IndexConfig
+
+from {{ pkg }}.memory.embeddings import embed_sync, embed_async
+{% endif %}
+
+logger = logging.getLogger(__name__)
+
+{% if long_term_backend == "sqlite" %}
+#: Relative to the project root. Gitignored — it holds real conversation data.
+STORE_PATH = Path(os.getenv("MEMORY_STORE_PATH", "{{ long_term_path }}"))
+{% elif long_term_backend == "postgres" %}
+DB_URI = os.getenv("POSTGRES_URI")
+
+
+def _clean_uri(uri: str | None) -> str | None:
+    """Strip a SQLAlchemy driver prefix.
+
+    PostgresStore talks to psycopg3 directly and rejects the `+driver` form, so
+    a URI copied from a SQLAlchemy config fails with a confusing parse error.
+    """
+    if not uri:
+        return uri
+    for prefix in (
+        "postgresql+asyncpg://",
+        "postgresql+psycopg://",
+        "postgresql+psycopg2://",
+    ):
+        if uri.startswith(prefix):
+            return uri.replace(prefix, "postgresql://", 1)
+    return uri
+{% endif %}
+
+{% if semantic_search %}
+
+
+def _index() -> IndexConfig:
+    """Vector search configuration.
+
+    `dims` must match the embedding model exactly. Changing either later
+    requires re-embedding every stored item — there is no migration tooling.
+    """
+    return IndexConfig(
+        dims={{ embedding_dims }},
+        embed=embed_sync,
+        fields={{ embedding_fields | tojson }},
+    )
+{% endif %}
+
+
+@contextlib.contextmanager
+def generate_sync_store() -> Iterator[object]:
+    """Yield a synchronous store. Useful in scripts, tests and migrations."""
+{% if long_term_backend == "sqlite" %}
+    STORE_PATH.parent.mkdir(parents=True, exist_ok=True)
+    with SqliteStore.from_conn_string(
+        str(STORE_PATH),
+        {% if semantic_search %}index=_index(),{% endif %}
+    ) as store:
+        store.setup()  # creates its own tables; runs once, then no-ops
+        yield store
+{% elif long_term_backend == "postgres" %}
+    uri = _clean_uri(DB_URI)
+    if not uri:
+        raise ValueError("POSTGRES_URI is not set — required for the postgres store")
+    with PostgresStore.from_conn_string(
+        uri,
+        {% if semantic_search %}index=_index(),{% endif %}
+    ) as store:
+        store.setup()
+        yield store
+{% else %}
+    yield InMemoryStore({% if semantic_search %}index=_index(){% endif %})
+{% endif %}
+
+
+@contextlib.asynccontextmanager
+async def generate_store() -> AsyncIterator[object]:
+    """Yield the store the Agent Server uses. Referenced by langgraph.json."""
+{% if long_term_backend == "sqlite" %}
+    STORE_PATH.parent.mkdir(parents=True, exist_ok=True)
+    async with AsyncSqliteStore.from_conn_string(
+        str(STORE_PATH),
+        {% if semantic_search %}index=_index(),{% endif %}
+    ) as store:
+        await store.setup()
+        logger.info("long-term memory: sqlite at %s", STORE_PATH)
+        yield store
+{% elif long_term_backend == "postgres" %}
+    uri = _clean_uri(DB_URI)
+    if not uri:
+        raise ValueError("POSTGRES_URI is not set — required for the postgres store")
+    async with AsyncPostgresStore.from_conn_string(
+        uri,
+        {% if semantic_search %}index=_index(),{% endif %}
+    ) as store:
+        await store.setup()
+        logger.info("long-term memory: postgres")
+        yield store
+{% else %}
+    # In-memory: everything is lost when the process exits. Tests only.
+    yield InMemoryStore({% if semantic_search %}index=_index(){% endif %})
+{% endif %}

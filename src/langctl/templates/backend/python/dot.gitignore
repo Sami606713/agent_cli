@@ -21,3 +21,9 @@ build/
 # node (frontend lives in web/)
 node_modules/
 .next/
+
+# databases — these contain real conversation data
+data/
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm

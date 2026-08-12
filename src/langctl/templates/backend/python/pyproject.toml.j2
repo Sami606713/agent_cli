@@ -7,16 +7,8 @@ description = "{{ name }} — a LangChain agent"
 # local interpreter than the one your deployment runs on.
 requires-python = ">=3.11,<3.14"
 dependencies = [
-    "langchain>=1.0",
-    "langgraph>=1.0",
-{% if model_provider == "anthropic" %}
-    "langchain-anthropic>=1.0",
-{% elif model_provider == "openai" %}
-    "langchain-openai>=1.0",
-{% elif model_provider == "google" %}
-    "langchain-google-genai>=2.0",
-{% endif %}
-]
+{% for package in runtime_packages %}    "{{ package }}",
+{% endfor %}]
 
 [project.optional-dependencies]
 dev = [

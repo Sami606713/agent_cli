@@ -1,0 +1,94 @@
+"""Short-term memory — the messages inside a single thread.
+
+Backend for this project: **{{ short_term_backend }}**
+
+{% if short_term_backend in ("server", "memory") %}
+The Agent Server manages checkpoints. Nothing here is wired into
+langgraph.json; `get_checkpointer()` exists only for scripts and tests that
+import the graph directly, where no server is present.
+
+This is the default because overriding the checkpointer *costs* capability: the
+server warns that a custom checkpointer lacking `adelete_for_runs` cannot clean
+up checkpoints from cancelled runs, so `multitask_strategy="rollback"` leaves
+stale thread state behind.
+{% else %}
+`langgraph.json` points `checkpointer.path` at `generate_checkpointer`, so
+thread history is written to {{ short_term_path }} and survives a restart.
+
+Known trade-off: the server logs a warning that this checkpointer has no
+`adelete_for_runs`, so checkpoints from cancelled runs are not cleaned up when
+`multitask_strategy="rollback"` is used.
+{% endif %}
+"""
+
+from __future__ import annotations
+
+import contextlib
+import os
+from collections.abc import AsyncIterator
+from pathlib import Path
+
+from {{ pkg }}.config import settings
+
+{% if short_term_backend == "sqlite" %}
+CHECKPOINT_PATH = Path(os.getenv("CHECKPOINT_PATH", "{{ short_term_path }}"))
+{% endif %}
+
+
+def get_checkpointer():
+    """Checkpointer for direct-import use; None when a server manages it."""
+    if settings.is_server_managed:
+        return None
+{% if short_term_backend == "sqlite" %}
+    import sqlite3
+
+    from langgraph.checkpoint.sqlite import SqliteSaver
+
+    CHECKPOINT_PATH.parent.mkdir(parents=True, exist_ok=True)
+    # check_same_thread=False: the caller may touch this from several threads.
+    conn = sqlite3.connect(str(CHECKPOINT_PATH), check_same_thread=False)
+    conn.execute("PRAGMA journal_mode=WAL")   # readers concurrent with a writer
+    conn.execute("PRAGMA busy_timeout=5000")  # wait on a lock instead of failing
+    saver = SqliteSaver(conn)
+    saver.setup()
+    return saver
+{% elif short_term_backend == "postgres" %}
+    from langgraph.checkpoint.postgres import PostgresSaver
+
+    uri = os.getenv("POSTGRES_URI")
+    if not uri:
+        raise ValueError("POSTGRES_URI is not set — required for the postgres checkpointer")
+    saver = PostgresSaver.from_conn_string(uri)
+    saver.setup()
+    return saver
+{% else %}
+    from langgraph.checkpoint.memory import InMemorySaver
+
+    # Lost on exit. Fine for tests; not for anything a user comes back to.
+    return InMemorySaver()
+{% endif %}
+
+{% if short_term_backend in ("sqlite", "postgres") %}
+
+
+@contextlib.asynccontextmanager
+async def generate_checkpointer() -> AsyncIterator[object]:
+    """Yield the checkpointer the Agent Server uses. Referenced by langgraph.json."""
+{% if short_term_backend == "sqlite" %}
+    from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
+
+    CHECKPOINT_PATH.parent.mkdir(parents=True, exist_ok=True)
+    async with AsyncSqliteSaver.from_conn_string(str(CHECKPOINT_PATH)) as saver:
+        await saver.setup()
+        yield saver
+{% else %}
+    from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
+
+    uri = os.getenv("POSTGRES_URI")
+    if not uri:
+        raise ValueError("POSTGRES_URI is not set — required for the postgres checkpointer")
+    async with AsyncPostgresSaver.from_conn_string(uri) as saver:
+        await saver.setup()
+        yield saver
+{% endif %}
+{% endif %}

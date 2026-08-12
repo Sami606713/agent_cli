@@ -1,0 +1,61 @@
+"""Tools that read and write long-term memory.
+
+These reach the store through `runtime.store`, which the Agent Server injects.
+Nothing here constructs a store — that happens once, in memory/store.py.
+
+Memories are namespaced per user so one user's facts can never surface in
+another's conversation.
+"""
+
+from __future__ import annotations
+
+from typing import Any
+
+from langchain.tools import ToolRuntime, tool
+
+#: Grouping under the user id is what keeps memories isolated between users.
+NAMESPACE_PREFIX = "memories"
+
+
+def _namespace(runtime: ToolRuntime) -> tuple[str, ...]:
+    user_id = getattr(getattr(runtime, "context", None), "user_id", None) or "default"
+    return (NAMESPACE_PREFIX, str(user_id))
+
+
+@tool
+def save_memory(key: str, text: str, runtime: ToolRuntime) -> str:
+    """Remember a fact about the user for future conversations.
+
+    Use this when the user states a durable preference or fact about themselves
+    ("I prefer metric units", "my team uses Postgres"). Do not use it for
+    anything that is only true within the current conversation.
+
+    Args:
+        key: Short stable identifier, e.g. "units" or "timezone".
+        text: The fact to remember, written as a full sentence.
+    """
+    store = runtime.store
+    if store is None:
+        return "Memory is not configured, so nothing was saved."
+    store.put(_namespace(runtime), key, {"text": text})
+    return f"Saved memory {key!r}."
+
+
+@tool
+def recall_memory(query: str, runtime: ToolRuntime, limit: int = 5) -> str:
+    """Look up previously saved facts about the user.
+
+    Use this when the answer might depend on something the user told you in an
+    earlier conversation.
+
+    Args:
+        query: What to look for, in natural language.
+        limit: Maximum number of memories to return.
+    """
+    store = runtime.store
+    if store is None:
+        return "Memory is not configured."
+    items: list[Any] = store.search(_namespace(runtime), query=query, limit=limit)
+    if not items:
+        return "No memories found."
+    return "\n".join(f"- {item.key}: {item.value.get('text', item.value)}" for item in items)

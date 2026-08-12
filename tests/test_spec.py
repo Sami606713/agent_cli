@@ -72,12 +72,22 @@ class TestLanggraphConfig:
         assert "python_version" not in cfg
         assert "dependencies" not in cfg
 
-    def test_semantic_search_emits_store_index(self):
-        cfg = spec(memory={"store": "postgres", "semantic_search": True}).to_langgraph_config()
-        assert cfg["store"]["index"]["dims"] == 1536
+    def test_store_path_is_emitted_for_persistent_memory(self):
+        """Verified against a real restart: without `store.path` the dev server
+        keeps long-term memory in process and loses it on exit."""
+        cfg = spec(name="support-agent").to_langgraph_config()
+        assert cfg["store"] == {
+            "path": "./src/support_agent/memory/store.py:generate_store"
+        }
 
-    def test_no_store_without_semantic_search(self):
-        assert "store" not in spec().to_langgraph_config()
+    def test_no_store_key_when_long_term_memory_is_off(self):
+        cfg = spec(memory={"long_term": {"enabled": False}}).to_langgraph_config()
+        assert "store" not in cfg
+
+    def test_no_store_key_for_the_in_memory_backend(self):
+        # Nothing to persist, so do not override the server's managed store.
+        cfg = spec(memory={"long_term": {"backend": "memory"}}).to_langgraph_config()
+        assert "store" not in cfg
 
     def test_generative_ui_only_for_node(self):
         py = spec(frontend={"generative_ui": True}).to_langgraph_config()

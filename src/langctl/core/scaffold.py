@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 from typing import Any
 
+from .deps import required_env_vars, runtime_packages
 from .render import render_layers, render_tree
 from .spec import AgentSpec
 
@@ -36,6 +37,20 @@ def render_context(spec: AgentSpec) -> dict[str, Any]:
         # changing proxy_prefix in agent.yaml silently 404s every request.
         "proxy_route_dir": spec.frontend.proxy_prefix.lstrip("/"),
         "max_duration": DEFAULT_MAX_DURATION,
+        # memory
+        "short_term_backend": spec.memory.short_term.backend,
+        "short_term_path": spec.memory.short_term.path,
+        "long_term_enabled": spec.memory.long_term.enabled,
+        "long_term_backend": spec.memory.long_term.backend,
+        "long_term_path": spec.memory.long_term.path,
+        "semantic_search": spec.memory.long_term.semantic_search,
+        "embedding_mode": spec.memory.long_term.embeddings.mode,
+        "embedding_identifier": spec.memory.long_term.embeddings.identifier,
+        "embedding_dims": spec.memory.long_term.embeddings.dims,
+        "embedding_fields": spec.memory.long_term.embeddings.fields,
+        # dependency fan-out: a feature and its package must never drift
+        "runtime_packages": runtime_packages(spec),
+        "required_env": required_env_vars(spec),
     }
 
 

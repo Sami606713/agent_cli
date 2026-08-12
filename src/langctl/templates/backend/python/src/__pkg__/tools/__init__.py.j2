@@ -1,0 +1,21 @@
+"""Tool registry.
+
+`agent.py` imports only `TOOLS` from here, so adding a tool means editing this
+file and one module beside it — never the agent wiring.
+"""
+
+from {{ pkg }}.tools.builtin import calculate, get_current_time
+{% if long_term_enabled %}
+from {{ pkg }}.tools.memory import recall_memory, save_memory
+{% endif %}
+
+TOOLS = [
+    get_current_time,
+    calculate,
+{% if long_term_enabled %}
+    save_memory,
+    recall_memory,
+{% endif %}
+]
+
+__all__ = ["TOOLS"]
