@@ -81,6 +81,18 @@ Postgres is actually reachable.
 Semantic search is off by default (it needs an embeddings vendor and costs per
 item). Enable it with `--semantic-search --embeddings local|provider|custom`.
 
+## Adding to an existing project
+
+```bash
+langctl add memory                  # or --backend postgres, --semantic-search
+langctl add frontend --ui minimal
+langctl add tool "lookup order"     # scaffolds and registers it
+```
+
+`add` regenerates the files langctl produced and **skips the ones you edited**,
+reporting each. A file that still matches what the template last wrote is safe
+to update; anything else is yours.
+
 ## Commands
 
 | Command | What it does |

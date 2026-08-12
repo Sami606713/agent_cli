@@ -8,6 +8,7 @@ import typer
 from rich.console import Console
 
 from . import __version__
+from .commands.add import app as add_app
 from .commands.dev import dev
 from .commands.doctor import doctor
 from .commands.new import new
@@ -24,6 +25,7 @@ cli = typer.Typer(
 )
 
 cli.command("new")(new)
+cli.add_typer(add_app)
 cli.command("dev")(dev)
 cli.command("sync")(sync)
 cli.command("doctor")(doctor)

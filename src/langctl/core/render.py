@@ -129,6 +129,42 @@ def render_tree(
     return RenderResult(written=written, skipped=skipped)
 
 
+def plan_layers(
+    templates: list[str | Path],
+    dest: Path,
+    context: dict[str, Any],
+) -> dict[Path, str]:
+    """Render layers to memory without touching disk.
+
+    Used to answer "would this file look different if the spec had been X?",
+    which is how `langctl add` distinguishes a file the user edited from one it
+    generated itself and may safely regenerate.
+    """
+    env = _jinja()
+    planned: dict[Path, str] = {}
+
+    for template in templates:
+        src = Path(template)
+        if not src.is_absolute():
+            src = TEMPLATE_ROOT / template
+        if not src.is_dir():
+            raise FileNotFoundError(f"template not found: {src}")
+        for path in sorted(src.rglob("*")):
+            if path.is_dir() or any(p in {"__pycache__", ".DS_Store"} for p in path.parts):
+                continue
+            rel = path.relative_to(src)
+            out = dest.joinpath(*[substitute_path(p, context) for p in rel.parts])
+            if out.name.endswith(".j2"):
+                out = out.with_name(out.name[:-3])
+                planned[out] = env.from_string(path.read_text(encoding="utf-8")).render(**context)
+            else:
+                try:
+                    planned[out] = path.read_text(encoding="utf-8")
+                except UnicodeDecodeError:
+                    continue  # binary asset: never a candidate for regeneration
+    return planned
+
+
 def render_layers(
     templates: list[str | Path],
     dest: Path,

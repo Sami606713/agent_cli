@@ -7,6 +7,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-08-12
+
+### Added
+
+- `langctl add memory | frontend | tool` — bring a feature into a project that
+  already exists, instead of only choosing at creation.
+  - `add memory` reuses the creation wizard, so the questions are identical, and
+    warns before reconfiguring memory that is already on.
+  - `add tool "lookup order"` scaffolds the module and splices it into the
+    `TOOLS` registry, or prints the two lines to add if the registry has been
+    restructured.
+- `plan_layers()` renders templates to memory, which is what lets `add` tell a
+  file it generated from one you edited.
+
+### Notes
+
+`add` does not simply skip existing files. The template has already written a
+file for the *old* spec, so skipping would leave the project stale — a
+`langgraph.json` promising durable memory while `store.py` still returns an
+in-memory store. That is silent wrongness rather than an error, and it is what
+the first implementation did. Files are now compared against what the template
+*would have written before the change*: identical means untouched and safe to
+regenerate, different means you edited it and it is left alone and reported.
+
+Editing `agent.yaml` cannot preserve comments through a PyYAML round-trip, so a
+commented file is backed up to `agent.yaml.bak` before the section is replaced.
+
+
 ## [0.5.0] - 2026-08-12
 
 ### Added
@@ -171,7 +199,8 @@ application.
   `SIG_IGN` from non-interactive shells, so `except KeyboardInterrupt` never
   fired. Both left `langgraph dev` and `next dev` orphaned holding their ports.
 
-[Unreleased]: https://github.com/Sami606713/agent_cli/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/Sami606713/agent_cli/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/Sami606713/agent_cli/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/Sami606713/agent_cli/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/Sami606713/agent_cli/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/Sami606713/agent_cli/compare/v0.2.0...v0.3.0
