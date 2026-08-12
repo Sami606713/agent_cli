@@ -32,11 +32,9 @@ def render_context(spec: AgentSpec) -> dict[str, Any]:
         "langsmith_project": spec.observability.project or spec.name,
         "backend_port": spec.backend.port,
         "frontend_port": spec.frontend.port,
-        "proxy_prefix": spec.frontend.proxy_prefix,
-        # Route handlers must live at the path the client calls, so the
-        # directory is derived from the prefix rather than hardcoded — otherwise
-        # changing proxy_prefix in agent.yaml silently 404s every request.
-        "proxy_route_dir": spec.frontend.proxy_prefix.lstrip("/"),
+        # agent-chat-ui mounts its passthrough at /api and we vendor its source
+        # unmodified, so the prefix is fixed rather than configurable.
+        "proxy_prefix": "/api",
         "max_duration": DEFAULT_MAX_DURATION,
         # memory
         "short_term_backend": spec.memory.short_term.backend,
@@ -130,21 +128,17 @@ def backend_template(spec: AgentSpec) -> str:
     return f"backend/{spec.runtime}"
 
 
-#: Layer shared by every frontend: the proxy route, layout, Tailwind entry, and
-#: build config. Rendered before the UI-specific layer, which may override files
-#: (nextjs_ai_elements replaces globals.css to add its design tokens).
-SHARED_FRONTEND_TEMPLATE = "frontend/_shared"
-
-
 def frontend_templates(spec: AgentSpec) -> list[str]:
-    """Template layers for the frontend, in render order.
+    """Template layers for the frontend.
 
-    One shared layer plus one UI layer. Keeping the proxy route in exactly one
-    place means a fix to it cannot land in two UIs and miss the third.
+    A single layer now. agent-chat-ui is a complete application with its own
+    passthrough route, layout and build config, so there is nothing to share
+    with it — the previous `_shared` layer existed to keep one proxy route
+    across three hand-built UIs.
     """
     if not spec.frontend.enabled or spec.frontend.kind == "none":
         return []
-    return [SHARED_FRONTEND_TEMPLATE, f"frontend/{spec.frontend.kind}"]
+    return [f"frontend/{spec.frontend.kind}"]
 
 
 def scaffold(spec: AgentSpec, dest: Path, *, overwrite: bool = False) -> list[Path]:

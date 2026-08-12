@@ -30,19 +30,21 @@ def _default_middleware() -> dict[str, Any]:
 
 Runtime = Literal["python", "node"]
 Mode = Literal["proxy", "embedded"]
-FrontendKind = Literal[
-    "nextjs_minimal",
-    "nextjs_assistant_ui",
-    "nextjs_ai_elements",
-    "nextjs_embedded",
-    "none",
-]
+FrontendKind = Literal["agent_chat_ui", "none"]
 
-#: Frontend kinds that talk to the Agent Server through the same-origin proxy.
-PROXY_FRONTENDS = frozenset({"nextjs_minimal", "nextjs_assistant_ui", "nextjs_ai_elements"})
+#: Frontend kinds that reach the Agent Server through a same-origin passthrough.
+PROXY_FRONTENDS = frozenset({"agent_chat_ui"})
 
-#: Renamed kinds, mapped forward so an existing agent.yaml keeps working.
-LEGACY_FRONTEND_KINDS = {"nextjs_proxy": "nextjs_minimal", "vite_proxy": "nextjs_minimal"}
+#: Every previous kind maps to the one UI. Projects scaffolded by earlier
+#: versions keep loading; their existing web/ directory is left untouched.
+LEGACY_FRONTEND_KINDS = {
+    "nextjs_proxy": "agent_chat_ui",
+    "vite_proxy": "agent_chat_ui",
+    "nextjs_minimal": "agent_chat_ui",
+    "nextjs_assistant_ui": "agent_chat_ui",
+    "nextjs_ai_elements": "agent_chat_ui",
+    "nextjs_embedded": "agent_chat_ui",
+}
 
 #: Agent Server paths the dev proxy must forward. Verified against the Agent Server
 #: surface and langchain-ai/deployment-cookbook's vite-langgraph-proxy.ts.
@@ -251,7 +253,7 @@ class MiddlewareSpec(BaseModel):
 
 class FrontendSpec(BaseModel):
     enabled: bool = True
-    kind: FrontendKind = "nextjs_assistant_ui"
+    kind: FrontendKind = "agent_chat_ui"
     port: int = 3000
     proxy_prefix: str = "/api/agent"
     generative_ui: bool = False
@@ -328,10 +330,6 @@ class AgentSpec(BaseModel):
                 "mode 'embedded' requires runtime 'node' — a Python agent cannot run "
                 "inside Next.js route handlers. Use mode 'proxy'."
             )
-        if self.mode == "embedded" and self.frontend.kind != "nextjs_embedded":
-            raise ValueError("mode 'embedded' requires frontend.kind 'nextjs_embedded'")
-        if self.mode == "proxy" and self.frontend.kind == "nextjs_embedded":
-            raise ValueError("frontend.kind 'nextjs_embedded' requires mode 'embedded'")
         if self.frontend.enabled and self.frontend.kind == "none":
             raise ValueError("frontend.enabled is true but frontend.kind is 'none'")
         if self.frontend.enabled and self.frontend.port == self.backend.port:

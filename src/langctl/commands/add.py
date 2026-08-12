@@ -185,7 +185,7 @@ def add_memory(
 
 @app.command("frontend")
 def add_frontend(
-    ui: str = typer.Option("assistant-ui", "--ui", help="assistant-ui, minimal or ai-elements"),
+    ui: str = typer.Option("agent-chat-ui", "--ui", help="Chat UI to add."),
 ) -> None:
     """Add a chat frontend to a backend-only project."""
     from .new import UI_CHOICES

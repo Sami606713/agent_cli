@@ -30,23 +30,11 @@ class TestModeCoherence:
 
     def test_python_cannot_be_embedded(self):
         with pytest.raises(ValidationError, match="embedded"):
-            AgentSpec(
-                name="x-y",
-                runtime="python",
-                mode="embedded",
-                frontend={"kind": "nextjs_embedded"},
-            )
+            AgentSpec(name="x-y", runtime="python", mode="embedded")
 
     def test_node_embedded_is_valid(self):
-        s = AgentSpec(
-            name="x-y", runtime="node", mode="embedded", frontend={"kind": "nextjs_embedded"}
-        )
+        s = AgentSpec(name="x-y", runtime="node", mode="embedded")
         assert s.uses_agent_server is False
-
-    def test_embedded_frontend_requires_embedded_mode(self):
-        with pytest.raises(ValidationError):
-            AgentSpec(name="x-y", runtime="node", mode="proxy",
-                      frontend={"kind": "nextjs_embedded"})
 
     def test_port_collision_rejected(self):
         with pytest.raises(ValidationError, match="must differ"):

@@ -102,19 +102,21 @@ Three things fall out of this:
 
 ## Chat UI
 
-| `--ui` | What you get | CSS |
-|---|---|---|
-| `assistant-ui` *(default)* | assistant-ui runtime — threads, branching, composer — via npm, plus a converter you own | Tailwind utilities |
-| `minimal` | one hand-written `Chat.tsx`, no UI dependencies | Tailwind utilities |
-| `ai-elements` *(experimental)* | shadcn-registry components copied into `web/components/` | Tailwind `@theme` tokens |
+`web/` is [LangChain's agent-chat-ui](https://github.com/langchain-ai/agent-chat-ui),
+vendored **unmodified** at a pinned commit (MIT). You get the real thing: thread
+history, an agent inbox for human-in-the-loop approvals, artifacts, markdown with
+syntax highlighting, file and image attachments, and generative UI.
 
-No template contains hand-written CSS: `globals.css` is `@import "tailwindcss";` and
-nothing else. A test enforces it.
+**The setup screen never appears.** Upstream shows a form asking for a deployment URL
+and assistant ID when either is missing:
 
-> **`ai-elements` currently fails `npm run build`.** Its generated components pull
-> `streamdown`, which resolves two incompatible copies of `shiki`; npm `overrides` do not
-> dedupe them. Our own files typecheck clean. It is excluded from the wizard and reachable
-> only via an explicit `--ui ai-elements`.
+```tsx
+if (!finalApiUrl || !finalAssistantId) {  // ← the setup screen
+```
+
+langctl pre-fills both, so that branch is never reached. The screen is *bypassed, not
+deleted* — leaving the source byte-identical means re-syncing with upstream is a plain
+diff rather than a merge. `web/VENDORED.md` records the exact commit.
 
 ## Memory
 

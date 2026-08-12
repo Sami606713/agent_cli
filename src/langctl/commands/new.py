@@ -25,27 +25,8 @@ from ..core.spec import AgentSpec
 
 console = Console()
 
-#: Chat UIs selectable with --ui.
-UI_CHOICES = {
-    "assistant-ui": "nextjs_assistant_ui",
-    "minimal": "nextjs_minimal",
-    "ai-elements": "nextjs_ai_elements",
-}
-
-#: Offered in the interactive wizard. `ai-elements` is deliberately excluded:
-#: its generated components currently fail `next build` because `streamdown`
-#: and `@streamdown/code` resolve two incompatible copies of `shiki`, and npm
-#: overrides do not dedupe them. It stays reachable via an explicit
-#: `--ui ai-elements` for anyone who wants to track the fix upstream.
-WIZARD_UI_CHOICES = ["assistant-ui", "minimal"]
-
-EXPERIMENTAL_UIS = {
-    "ai-elements": (
-        "AI Elements components currently fail type checking (upstream shiki "
-        "version conflict in streamdown), so `npm run build` will fail until it "
-        "is fixed upstream."
-    ),
-}
+#: One chat UI: LangChain's own agent-chat-ui, vendored unmodified.
+UI_CHOICES = {"agent-chat-ui": "agent_chat_ui"}
 
 MODEL_DEFAULTS = {
     "anthropic": "claude-opus-5",
@@ -116,7 +97,7 @@ def new(
     model_name: str = typer.Option(None, "--model"),
     frontend: bool = typer.Option(None, "--frontend/--no-frontend"),
     ui: str = typer.Option(
-        None, "--ui", help=f"Chat UI: {', '.join(UI_CHOICES)}. Default: assistant-ui."
+        None, "--ui", help="Chat UI. Only agent-chat-ui is available."
     ),
     memory: bool = typer.Option(
         None, "--memory/--no-memory", help="Long-term memory. Default: enabled."
@@ -155,18 +136,14 @@ def new(
         frontend = True if yes else Confirm.ask("Include a chat frontend?", default=True)
 
     if frontend:
-        if ui is None:
-            ui = "assistant-ui" if yes else Prompt.ask(
-                "Chat UI", choices=WIZARD_UI_CHOICES, default="assistant-ui"
-            )
-        if ui not in UI_CHOICES:
+        # Only one UI, so nothing is asked; the flag stays for scripts that
+        # already pass it and for a second UI later.
+        if ui is not None and ui not in UI_CHOICES:
             raise LangctlError(
                 f"Unknown --ui value {ui!r}",
                 fix=f"Choose one of: {', '.join(UI_CHOICES)}",
             )
-        if ui in EXPERIMENTAL_UIS:
-            console.print(f"[yellow]![/yellow] {ui} is experimental: {EXPERIMENTAL_UIS[ui]}")
-        frontend_kind = UI_CHOICES[ui]
+        frontend_kind = "agent_chat_ui"
     else:
         frontend_kind = "none"
 

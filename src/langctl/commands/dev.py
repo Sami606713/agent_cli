@@ -141,8 +141,15 @@ def dev(
                 command=_frontend_command(project, web_port),
                 cwd=project.frontend_dir,
                 color="cyan",
-                # Point the proxy at whichever agent we actually started.
-                env={"AGENT_PROXY_TARGET": api_url},
+                # agent-chat-ui's passthrough reads LANGGRAPH_API_URL; the
+                # browser only ever sees NEXT_PUBLIC_API_URL="/api", so the
+                # agent's address and any key stay server-side. Both are set
+                # here so the chat's setup screen is never reached.
+                env={
+                    "LANGGRAPH_API_URL": api_url,
+                    "NEXT_PUBLIC_API_URL": "/api",
+                    "NEXT_PUBLIC_ASSISTANT_ID": spec.graph_id,
+                },
                 health_url=f"http://127.0.0.1:{web_port}/",
                 health_timeout=120.0,
             )

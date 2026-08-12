@@ -106,7 +106,11 @@ def share(
                 command=_frontend_command(project, web_port),
                 cwd=project.frontend_dir,
                 color="cyan",
-                env={"AGENT_PROXY_TARGET": api_url},
+                env={
+                    "LANGGRAPH_API_URL": api_url,
+                    "NEXT_PUBLIC_API_URL": "/api",
+                    "NEXT_PUBLIC_ASSISTANT_ID": spec.graph_id,
+                },
                 health_url=f"http://127.0.0.1:{web_port}/",
                 health_timeout=120.0,
             )

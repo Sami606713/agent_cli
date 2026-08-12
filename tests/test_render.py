@@ -77,8 +77,9 @@ class TestScaffold:
             "src/demo_agent/__init__.py",
             "tests/test_agent.py",
             "web/package.json",
-            "web/app/api/agent/[...path]/route.ts",
-            "web/app/components/Chat.tsx",
+            # vendored agent-chat-ui: its own passthrough and provider
+            "web/src/app/api/[..._path]/route.ts",
+            "web/src/providers/Stream.tsx",
         ):
             assert (tmp_path / rel).is_file(), f"missing {rel}"
 
@@ -93,8 +94,11 @@ class TestScaffold:
         for path in tmp_path.rglob("*"):
             if not path.is_file() or "node_modules" in path.parts:
                 continue
+            # The vendored app is copied verbatim and its TSX/CSS contain braces
+            # that were never Jinja; only templated files are checked.
+            if "web" in path.parts and path.suffix not in {".json", ".md"}:
+                continue
             text = path.read_text(encoding="utf-8", errors="ignore")
-            # Chat.tsx legitimately contains JSX braces, but never Jinja tags.
             assert "{%" not in text, f"unrendered jinja block in {path}"
             assert "{{ " not in text, f"unrendered jinja expression in {path}"
 
@@ -107,11 +111,12 @@ class TestScaffold:
                 assert "NEXT_PUBLIC_LANGSMITH" not in text
                 assert "NEXT_PUBLIC_ANTHROPIC" not in text
 
-    def test_proxy_route_defaults_to_the_configured_backend_port(self, tmp_path):
+    def test_passthrough_target_defaults_to_the_backend_port(self, tmp_path):
+        # agent-chat-ui reads LANGGRAPH_API_URL; langctl pre-fills it so the
+        # setup screen never renders.
         scaffold(AgentSpec(name="demo-agent", backend={"port": 2500}), tmp_path)
-        route = (tmp_path / "web/app/api/agent/[...path]/route.ts").read_text()
-        assert "http://127.0.0.1:2500" in route
-        assert "AGENT_PROXY_TARGET" in route
+        env = (tmp_path / "web/.env.example").read_text()
+        assert "LANGGRAPH_API_URL=http://127.0.0.1:2500" in env
 
 
 class TestConfigMerge:
@@ -156,34 +161,3 @@ class TestBackendImportability:
         scaffold(AgentSpec(name="demo-agent"), tmp_path)
         assert '">=3.11,<3.14"' in (tmp_path / "pyproject.toml").read_text()
 
-
-class TestFrontendApiUrl:
-    """The SDK builds URLs with `new URL(apiUrl + path)` — no base argument.
-
-    A relative apiUrl therefore throws "Failed to construct 'URL': Invalid URL"
-    on the first request. The UI must pass an absolute same-origin URL.
-    """
-
-    def test_api_url_is_absolute_at_runtime(self, tmp_path):
-        scaffold(AgentSpec(name="demo-agent"), tmp_path)
-        chat = (tmp_path / "web/app/components/Chat.tsx").read_text()
-        assert "window.location.origin" in chat
-        # The bare relative prefix must never be handed to useStream directly.
-        assert 'apiUrl: "/api/agent"' not in chat
-        assert "apiUrl," in chat
-
-    def test_api_url_is_ssr_safe(self, tmp_path):
-        scaffold(AgentSpec(name="demo-agent"), tmp_path)
-        chat = (tmp_path / "web/app/components/Chat.tsx").read_text()
-        assert 'typeof window === "undefined"' in chat
-
-    def test_proxy_prefix_is_respected(self, tmp_path):
-        scaffold(AgentSpec(name="demo-agent", frontend={"proxy_prefix": "/api/llm"}), tmp_path)
-        chat = (tmp_path / "web/app/components/Chat.tsx").read_text()
-        assert 'PROXY_PREFIX = "/api/llm"' in chat
-
-    def test_route_handler_lives_where_the_client_calls(self, tmp_path):
-        """A custom prefix must move the route file too, or every call 404s."""
-        scaffold(AgentSpec(name="demo-agent", frontend={"proxy_prefix": "/api/llm"}), tmp_path)
-        assert (tmp_path / "web/app/api/llm/[...path]/route.ts").is_file()
-        assert not (tmp_path / "web/app/api/agent").exists()

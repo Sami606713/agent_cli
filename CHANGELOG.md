@@ -7,6 +7,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-08-13
+
+### Changed
+
+- **The chat UI is now LangChain's `agent-chat-ui`, vendored unmodified** at a
+  pinned commit under the MIT licence. It brings thread history, an agent inbox
+  for human-in-the-loop approvals, artifacts, markdown with syntax highlighting,
+  attachments and generative UI — none of which the hand-built templates had.
+- The setup screen that asks for a deployment URL and assistant ID **never
+  appears**, because `NEXT_PUBLIC_API_URL` and `NEXT_PUBLIC_ASSISTANT_ID` are
+  pre-filled. It is bypassed rather than deleted: the source stays byte-identical
+  so a future re-sync is a diff, not a merge.
+- `langctl dev` and `langctl share` now set `LANGGRAPH_API_URL` for the app's own
+  passthrough instead of the old `AGENT_PROXY_TARGET`.
+
+### Removed
+
+- The `nextjs_minimal`, `nextjs_assistant_ui` and `nextjs_ai_elements` templates,
+  and the `_shared` layer that existed to keep one proxy route across them.
+  agent-chat-ui is self-contained. Every old `frontend.kind` still loads and maps
+  to the new one, and an existing `web/` directory is left untouched.
+- The `--ui` question in the wizard. The flag remains for scripts that pass it.
+
+### Notes
+
+The vendored app arrived at the same architecture langctl already used — a
+same-origin passthrough with the API key attached server-side. Its `.env.example`
+says so explicitly: "Do NOT prefix this with NEXT_PUBLIC_". Its passthrough runs
+on the edge runtime where ours used nodejs.
+
+Verified end to end: `npm install`, `tsc --noEmit`, `next build`, then `langctl
+dev` serving the chat with no setup screen, the passthrough reaching the agent,
+no key in the page, and both ports released on shutdown.
+
+
 ## [0.8.1] - 2026-08-13
 
 ### Changed
@@ -278,7 +313,8 @@ application.
   `SIG_IGN` from non-interactive shells, so `except KeyboardInterrupt` never
   fired. Both left `langgraph dev` and `next dev` orphaned holding their ports.
 
-[Unreleased]: https://github.com/Sami606713/agent_cli/compare/v0.8.1...HEAD
+[Unreleased]: https://github.com/Sami606713/agent_cli/compare/v0.9.0...HEAD
+[0.9.0]: https://github.com/Sami606713/agent_cli/compare/v0.8.1...v0.9.0
 [0.8.1]: https://github.com/Sami606713/agent_cli/compare/v0.8.0...v0.8.1
 [0.8.0]: https://github.com/Sami606713/agent_cli/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/Sami606713/agent_cli/compare/v0.6.0...v0.7.0
