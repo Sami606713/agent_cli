@@ -10,6 +10,7 @@ Keeping the mapping here means a template and its requirements cannot drift.
 
 from __future__ import annotations
 
+from .middleware import REGISTRY
 from .spec import AgentSpec
 
 #: Chat model provider → package supplying it.
@@ -68,6 +69,13 @@ def runtime_packages(spec: AgentSpec) -> list[str]:
                 embedding_package = EMBEDDING_PACKAGES.get(embeddings.provider)
                 if embedding_package:
                     packages.append(embedding_package)
+
+    # A middleware whose package is missing is a startup failure that
+    # `langgraph validate` reports as valid — same trap as the embeddings driver.
+    for key in spec.middleware.enabled_keys():
+        mw = REGISTRY.get(key)
+        if mw and mw.package:
+            packages.append(mw.package)
 
     # Preserve order while removing duplicates: the model and embedding
     # providers are frequently the same package.

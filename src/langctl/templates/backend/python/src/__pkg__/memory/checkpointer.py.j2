@@ -23,14 +23,18 @@ Known trade-off: the server logs a warning that this checkpointer has no
 
 from __future__ import annotations
 
+{% if short_term_backend in ("sqlite", "postgres") %}
 import contextlib
 import os
 from collections.abc import AsyncIterator
-from pathlib import Path
-
-from {{ pkg }}.config import settings
-
 {% if short_term_backend == "sqlite" %}
+from pathlib import Path
+{% endif %}
+
+{% endif %}
+from {{ pkg }}.config import settings
+{% if short_term_backend == "sqlite" %}
+
 CHECKPOINT_PATH = Path(os.getenv("CHECKPOINT_PATH", "{{ short_term_path }}"))
 {% endif %}
 

@@ -7,6 +7,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-08-12
+
+### Added
+
+- Middleware support. A registry of 13 built-ins, emitted into
+  `middleware/__init__.py` in a fixed **semantic** order — guardrails → context
+  → limits → reliability → human-in-the-loop → capability → custom — because
+  redaction placed after summarization means raw content already reached the
+  summarizing model.
+- `langctl add middleware <name> | --custom <name> | --list`.
+- Custom middleware scaffolds as a bare class with **no hook methods**. Which
+  hooks a middleware needs is the whole design decision; the docstring lists all
+  six with their real signatures so the choice can be made in place.
+
+### Changed
+
+- **New projects now have cost guards by default**: `ModelCallLimitMiddleware`
+  (20 model calls per run), `ToolCallLimitMiddleware` (30 tool calls) and
+  `ToolRetryMiddleware` (2 retries). This changes behaviour — an agent that
+  previously ran unbounded now stops. The limits are in `agent.yaml`.
+- Generated projects now lint clean under the `ruff` config they ship with.
+  Conditional templates were importing modules their chosen branch never used,
+  so a freshly scaffolded project failed its own `ruff check` with 13 errors.
+
+### Notes
+
+The registry's parameter names were wrong on the first pass — taken from the
+docs rather than the constructors — and only importing the generated module
+caught it. `ModelCallLimitMiddleware` takes `run_limit`/`thread_limit`, not
+`max_calls`; `SummarizationMiddleware` requires a model (defaulted to the
+project's own); `PIIMiddleware` takes a single `pii_type`, so N types produce N
+instances.
+
+Three middleware are deliberately not offered. `ToolErrorMiddleware` requires an
+`on_error` callable, which cannot be expressed in YAML — write it as custom
+middleware. `ModelFallbackMiddleware` and `HumanInTheLoopMiddleware` are
+rejected unless their required settings are present, rather than emitting a call
+that raises at import.
+
+
 ## [0.7.0] - 2026-08-12
 
 ### Added
@@ -223,7 +263,8 @@ application.
   `SIG_IGN` from non-interactive shells, so `except KeyboardInterrupt` never
   fired. Both left `langgraph dev` and `next dev` orphaned holding their ports.
 
-[Unreleased]: https://github.com/Sami606713/agent_cli/compare/v0.7.0...HEAD
+[Unreleased]: https://github.com/Sami606713/agent_cli/compare/v0.8.0...HEAD
+[0.8.0]: https://github.com/Sami606713/agent_cli/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/Sami606713/agent_cli/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/Sami606713/agent_cli/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/Sami606713/agent_cli/compare/v0.4.0...v0.5.0

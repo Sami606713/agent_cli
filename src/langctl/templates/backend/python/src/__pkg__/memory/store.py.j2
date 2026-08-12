@@ -17,10 +17,17 @@ from __future__ import annotations
 
 import contextlib
 import logging
+{% if long_term_backend in ("sqlite", "postgres") %}
 import os
+{% endif %}
 from collections.abc import AsyncIterator, Iterator
+{% if long_term_backend == "sqlite" %}
 from pathlib import Path
+{% endif %}
 
+{% if semantic_search %}
+from langgraph.store.base import IndexConfig
+{% endif %}
 {% if long_term_backend == "postgres" %}
 from langgraph.store.postgres import PostgresStore
 from langgraph.store.postgres.aio import AsyncPostgresStore
@@ -30,9 +37,10 @@ from langgraph.store.sqlite import AsyncSqliteStore, SqliteStore
 from langgraph.store.memory import InMemoryStore
 {% endif %}
 {% if semantic_search %}
-from langgraph.store.base import IndexConfig
 
-from {{ pkg }}.memory.embeddings import embed_sync, embed_async
+# embed_sync is what IndexConfig takes; the async variant is exported for code
+# that embeds directly from an async context.
+from {{ pkg }}.memory.embeddings import embed_sync
 {% endif %}
 
 logger = logging.getLogger(__name__)

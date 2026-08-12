@@ -10,9 +10,13 @@ Model: {{ embedding_identifier }} ({{ embedding_dims }} dimensions)
 
 from __future__ import annotations
 
+{% if embedding_mode in ("local", "custom") %}
 import asyncio
+{% endif %}
 from collections.abc import Sequence
+{% if embedding_mode in ("provider", "local") %}
 from functools import lru_cache
+{% endif %}
 
 #: Must match the model's true output width, and the value in the store index.
 DIMS = {{ embedding_dims }}

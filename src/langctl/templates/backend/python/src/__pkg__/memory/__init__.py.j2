@@ -12,4 +12,4 @@ them, so their lifetime matches the server's rather than a module import.
 from {{ pkg }}.memory.checkpointer import get_checkpointer
 from {{ pkg }}.memory.store import generate_store, generate_sync_store
 
-__all__ = ["get_checkpointer", "generate_store", "generate_sync_store"]
+__all__ = ["generate_store", "generate_sync_store", "get_checkpointer"]

@@ -6,7 +6,7 @@ reads it to decide when to call the tool, so it is prompt text, not just docs.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from langchain_core.tools import tool
 
@@ -22,12 +22,12 @@ def get_current_time(timezone_name: str = "UTC") -> str:
         timezone_name: IANA timezone name, e.g. "UTC" or "America/New_York".
     """
     if timezone_name.upper() == "UTC":
-        return datetime.now(timezone.utc).isoformat()
+        return datetime.now(UTC).isoformat()
     try:
         from zoneinfo import ZoneInfo
 
         return datetime.now(ZoneInfo(timezone_name)).isoformat()
-    except Exception:
+    except (ImportError, KeyError, ValueError):
         # Returning a message beats raising: the model can recover from this.
         return f"Unknown timezone {timezone_name!r}. Try 'UTC'."
 
@@ -43,8 +43,8 @@ def calculate(expression: str) -> str:
         return "Refused: only basic arithmetic characters are allowed."
     try:
         # Safe: the character allowlist above excludes names, calls and attributes.
-        return str(eval(expression, {"__builtins__": {}}, {}))  # noqa: S307
-    except Exception as exc:
+        return str(eval(expression, {"__builtins__": {}}, {}))
+    except (SyntaxError, ValueError, TypeError, ZeroDivisionError, NameError) as exc:
         return f"Could not evaluate {expression!r}: {exc}"
 
 

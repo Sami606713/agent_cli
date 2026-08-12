@@ -16,6 +16,7 @@ from langchain.agents import create_agent
 
 from {{ pkg }}.config import settings
 from {{ pkg }}.memory import get_checkpointer
+from {{ pkg }}.middleware import MIDDLEWARE
 from {{ pkg }}.prompts import SYSTEM_PROMPT
 from {{ pkg }}.tools import TOOLS
 
@@ -27,6 +28,7 @@ graph = create_agent(
     model=settings.model_identifier,
     tools=TOOLS,
     system_prompt=SYSTEM_PROMPT,
+    middleware=MIDDLEWARE,
     checkpointer=get_checkpointer(),
     name="{{ name }}",
 )

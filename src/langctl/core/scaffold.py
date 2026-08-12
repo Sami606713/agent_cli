@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from .deps import required_env_vars, runtime_packages
+from .middleware import ORDER_LABEL, call_expressions, missing_config, ordered
 from .render import render_layers, render_tree
 from .spec import AgentSpec
 
@@ -51,7 +52,74 @@ def render_context(spec: AgentSpec) -> dict[str, Any]:
         # dependency fan-out: a feature and its package must never drift
         "runtime_packages": runtime_packages(spec),
         "required_env": required_env_vars(spec),
+        **middleware_context(spec),
     }
+
+
+def middleware_context(spec: AgentSpec) -> dict[str, Any]:
+    """Imports and constructor calls for the middleware list, in execution order.
+
+    Imports are grouped per module so the generated file has one import line per
+    source rather than one per class.
+    """
+    entries = ordered(spec.middleware.enabled_keys())
+
+    by_module: dict[str, list[str]] = {}
+    rendered: list[dict[str, str]] = []
+    previous_group: str | None = None
+    for mw in entries:
+        settings = spec.middleware.settings(mw.key)
+        if missing_config(mw.key, settings):
+            # Enabled without a required setting. Emitting the call would make
+            # the project fail at import; leaving it out keeps it runnable, and
+            # `sync` reports the omission.
+            continue
+        by_module.setdefault(mw.module, []).append(mw.cls)
+        group = ORDER_LABEL[mw.order]
+        # A middleware can produce several instances — PIIMiddleware takes one
+        # pii_type each, so three types mean three entries in the list.
+        for expression in call_expressions(mw, settings, spec.model.identifier):
+            rendered.append(
+                {
+                    # Label the group only when it changes, so the list reads as
+                    # sections rather than a repeated comment on every line.
+                    "group": "" if group == previous_group else group,
+                    "expression": expression,
+                }
+            )
+            previous_group = group
+
+    imports = [
+        (module, _import_names(sorted(names))) for module, names in sorted(by_module.items())
+    ]
+    custom = [
+        {"name": name, "cls": _custom_class_name(name)} for name in spec.middleware.custom
+    ]
+    return {
+        "middleware_imports": imports,
+        "middleware_entries": rendered,
+        "middleware_custom": custom,
+        "middleware_enabled": [m.key for m in entries],
+    }
+
+
+def _import_names(names: list[str]) -> str:
+    """Render an import list, wrapping when it would exceed the line limit.
+
+    Generated projects lint themselves at 100 columns, so a long single-line
+    import would fail the user's own `ruff check`.
+    """
+    single = ", ".join(names)
+    if len(single) <= 60:
+        return single
+    body = "".join(f"    {name},\n" for name in names)
+    return f"(\n{body})"
+
+
+def _custom_class_name(name: str) -> str:
+    """rate_limit -> RateLimitMiddleware."""
+    base = "".join(part.title() for part in name.replace("-", "_").split("_") if part)
+    return base if base.endswith("Middleware") else f"{base}Middleware"
 
 
 def backend_template(spec: AgentSpec) -> str:

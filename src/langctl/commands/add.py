@@ -15,6 +15,9 @@ from rich.panel import Panel
 from ..core.errors import LangctlError
 from ..core.manifest import Project
 from ..core.memory_wizard import MEMORY_BACKENDS, ask_memory, memory_from_flags
+from ..core.middleware import REGISTRY, conflicts_in, missing_config, ordered
+from ..core.middleware_scaffold import class_name, module_key
+from ..core.middleware_scaffold import render as render_custom
 from ..core.pyproject import sync_dependencies
 from ..core.render import plan_layers, render_layers
 from ..core.scaffold import (
@@ -265,3 +268,116 @@ def add_tool(
         console.print(f"      [cyan]TOOLS = [..., {symbol}][/cyan]")
 
     console.print(f"\n[dim]Edit tools/{target.name}, then `langctl dev`.[/dim]")
+
+
+@app.command("middleware")
+def add_middleware(
+    name: str = typer.Argument(None, help="Built-in middleware key, e.g. summarization."),
+    custom: str = typer.Option(None, "--custom", help="Scaffold your own middleware class."),
+    list_available: bool = typer.Option(False, "--list", help="Show the registry."),
+) -> None:
+    """Enable a built-in middleware, or scaffold a custom one."""
+    project = Project.load()
+    spec = project.spec
+
+    if list_available:
+        enabled = set(spec.middleware.enabled_keys())
+        for mw in ordered(list(REGISTRY)):
+            mark = "[green]on [/green]" if mw.key in enabled else "[dim]off[/dim]"
+            console.print(f"  {mark} [cyan]{mw.key:20s}[/cyan] {mw.summary}")
+        if spec.middleware.custom:
+            console.print(f"  [green]on [/green] [cyan]custom[/cyan]: "
+                          f"{', '.join(spec.middleware.custom)}")
+        return
+
+    if custom:
+        _add_custom_middleware(project, custom)
+        return
+
+    if not name:
+        raise LangctlError(
+            "Give a middleware name, or --custom <name> to write your own",
+            fix="langctl add middleware --list",
+        )
+
+    mw = REGISTRY.get(name)
+    if mw is None:
+        raise LangctlError(
+            f"Unknown middleware {name!r}", fix="langctl add middleware --list"
+        )
+    if mw.requires_provider and spec.model.provider != mw.requires_provider:
+        raise LangctlError(
+            f"{name} requires the {mw.requires_provider} provider; "
+            f"this project uses {spec.model.provider}",
+            fix="Change model.provider in agent.yaml, or pick another middleware.",
+        )
+
+    block = spec.middleware.model_dump()
+    if block.get(name, {}).get("enabled"):
+        console.print(f"[yellow]![/yellow] {name} is already enabled.")
+        raise typer.Exit()
+
+    settings = {"enabled": True, **mw.defaults}
+    absent = missing_config(name, settings)
+    if absent:
+        # Emitting the call anyway would produce a file that fails at import —
+        # the constructor raises rather than defaulting.
+        raise LangctlError(
+            f"{name} needs {' and '.join(absent)} before it can be enabled",
+            fix=(
+                f"Add it under middleware.{name} in agent.yaml, then run "
+                "`langctl sync`."
+            ),
+        )
+
+    block[name] = settings
+    _write_middleware(project, spec, block)
+
+    if mw.note:
+        console.print(f"  [dim]{mw.note}[/dim]")
+    for a, b in conflicts_in([k for k, v in block.items()
+                              if isinstance(v, dict) and v.get("enabled")]):
+        console.print(
+            f"  [yellow]![/yellow] {a} and {b} overlap in purpose; "
+            "enabling both may produce surprising behaviour."
+        )
+
+
+def _add_custom_middleware(project: Project, name: str) -> None:
+    key = module_key(name)
+    target = project.root / "src" / project.spec.package_name / "middleware" / "custom.py"
+    if not target.is_file():
+        raise LangctlError(
+            f"No middleware package at {target.parent}",
+            fix="This project predates middleware support. Run `langctl sync` first.",
+        )
+
+    cls = class_name(key)
+    source = target.read_text(encoding="utf-8")
+    if f"class {cls}(" in source:
+        raise LangctlError(f"{cls} already exists in custom.py", fix="Pick another name.")
+
+    # Append rather than overwrite: custom.py is the user's file.
+    body = render_custom(key)
+    body = body.split('from langchain.agents.middleware import AgentMiddleware\n', 1)[1]
+    if "from langchain.agents.middleware import AgentMiddleware" not in source:
+        source += "\nfrom langchain.agents.middleware import AgentMiddleware\n"
+    target.write_text(source.rstrip() + "\n\n\n" + body.lstrip(), encoding="utf-8")
+    console.print(f"  [green]+[/green] middleware/custom.py :: {cls}")
+
+    block = project.spec.middleware.model_dump()
+    block.setdefault("custom", [])
+    if key not in block["custom"]:
+        block["custom"].append(key)
+    _write_middleware(project, project.spec, block)
+    console.print(f"\n[dim]Add the hooks you need to {cls}, then `langctl dev`.[/dim]")
+
+
+def _write_middleware(project: Project, spec: AgentSpec, block: dict) -> None:
+    """Persist the middleware block and regenerate the derived list."""
+    _, backup_path = merge_section(project.spec_path, "middleware", block)
+    if backup_path:
+        console.print(f"  [dim]backup at {backup_path.name}[/dim]")
+
+    updated = spec.model_copy(update={"middleware": type(spec.middleware)(**block)})
+    _apply(project, spec, updated)

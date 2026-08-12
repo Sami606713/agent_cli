@@ -140,6 +140,40 @@ Two memories, opposite defaults, for a reason: overriding the **store** is a str
 (it is otherwise lost on restart), while overriding the **checkpointer** loses
 `adelete_for_runs`, so threads stay server-managed unless you ask.
 
+## Middleware
+
+Every new project ships with cost and reliability guards on — an agent with no
+call limit can loop until it exhausts your budget:
+
+```python
+MIDDLEWARE = [
+    # limits
+    ModelCallLimitMiddleware(run_limit=20),
+    ToolCallLimitMiddleware(run_limit=30),
+    # reliability
+    ToolRetryMiddleware(max_retries=2),
+]
+```
+
+```bash
+langctl add middleware --list              # registry, and what is on
+langctl add middleware summarization
+langctl add middleware --custom rate_limit # your own class
+```
+
+**Order is semantic, not alphabetical.** langctl emits a fixed sequence —
+guardrails → context → limits → reliability → human-in-the-loop → capability →
+custom — because PII redaction placed after summarization means raw content
+already reached the summarizing model. Custom middleware always runs last, so it
+sees a fully prepared request.
+
+Settings live in `agent.yaml` and are regenerated into `middleware/__init__.py`
+by `langctl sync`.
+
+Custom middleware is scaffolded as a bare class — **no hooks**. Which of the six
+hooks a middleware needs is the design decision, so the docstring lists them all
+with real signatures and you add only what you use.
+
 ## Adding to an existing project
 
 Upgrading langctl does not touch projects you already created — templates are copied at

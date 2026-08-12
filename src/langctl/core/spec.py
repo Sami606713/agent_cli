@@ -17,6 +17,17 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 
 from .errors import SpecError
 
+
+def _default_middleware() -> dict[str, Any]:
+    """Cost and reliability guards every new project starts with.
+
+    Imported lazily: the registry imports nothing from the spec, but keeping the
+    call inside a function documents that the registry owns these values.
+    """
+    from .middleware import default_config
+
+    return default_config()
+
 Runtime = Literal["python", "node"]
 Mode = Literal["proxy", "embedded"]
 FrontendKind = Literal[
@@ -208,6 +219,36 @@ class MemorySpec(BaseModel):
         }
 
 
+class MiddlewareSpec(BaseModel):
+    """Which middleware are on, and how each is configured.
+
+    Free-form by design: keys are registry names, values are that middleware's
+    settings. Validating them here would duplicate the registry, so the registry
+    stays the single source of truth and unknown keys are reported by `sync`.
+    """
+
+    model_config = {"extra": "allow"}
+
+    #: Names of custom AgentMiddleware classes in middleware/custom.py.
+    custom: list[str] = Field(default_factory=list)
+
+    def enabled_keys(self) -> list[str]:
+        """Built-in middleware switched on, in agent.yaml order."""
+        keys = []
+        for key, value in self.model_dump().items():
+            if key == "custom":
+                continue
+            if isinstance(value, dict) and value.get("enabled"):
+                keys.append(key)
+        return keys
+
+    def settings(self, key: str) -> dict[str, Any]:
+        value = getattr(self, key, None)
+        if not isinstance(value, dict):
+            return {}
+        return {k: v for k, v in value.items() if k != "enabled"}
+
+
 class FrontendSpec(BaseModel):
     enabled: bool = True
     kind: FrontendKind = "nextjs_assistant_ui"
@@ -257,6 +298,9 @@ class AgentSpec(BaseModel):
     mode: Mode = "proxy"
     model: ModelSpec = Field(default_factory=ModelSpec)
     memory: MemorySpec = Field(default_factory=MemorySpec)
+    middleware: MiddlewareSpec = Field(
+        default_factory=lambda: MiddlewareSpec(**_default_middleware())
+    )
     frontend: FrontendSpec = Field(default_factory=FrontendSpec)
     backend: BackendSpec = Field(default_factory=BackendSpec)
     observability: ObservabilitySpec = Field(default_factory=ObservabilitySpec)

@@ -1,0 +1,41 @@
+"""Middleware, in execution order.
+
+`create_agent` takes this list as a sequence and runs it in order, so the order
+is semantic rather than cosmetic: redaction placed after summarization would
+mean raw content had already reached the summarizing model. The grouping below
+is what langctl enforces.
+
+Regenerated from agent.yaml by `langctl sync` — change settings there, not here.
+Custom classes live in custom.py and always run last, so they see a fully
+prepared request.
+"""
+
+from __future__ import annotations
+
+{% for module, names in middleware_imports %}
+from {{ module }} import {{ names }}
+{% endfor %}
+{% if middleware_custom %}
+
+{% for entry in middleware_custom %}
+from {{ pkg }}.middleware.custom import {{ entry.cls }}
+{% endfor %}
+{% endif %}
+
+MIDDLEWARE = [
+{% if not middleware_entries and not middleware_custom %}
+    # Nothing enabled. `langctl add middleware --list` shows what is available.
+{% endif %}
+{% for entry in middleware_entries %}
+{% if entry.group %}
+    # {{ entry.group }}
+{% endif %}
+    {{ entry.expression }},
+{% endfor %}
+{% for entry in middleware_custom %}
+    # custom
+    {{ entry.cls }}(),
+{% endfor %}
+]
+
+__all__ = ["MIDDLEWARE"]
