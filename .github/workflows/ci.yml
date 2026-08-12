@@ -71,23 +71,22 @@ jobs:
           set -e
           for f in agent.yaml langgraph.json pyproject.toml .env.example \
                    src/ci_check/agent.py \
+                   src/ci_check/memory/store.py \
+                   src/ci_check/middleware/__init__.py \
                    web/package.json \
-                   "web/app/api/agent/[...path]/route.ts" \
-                   web/app/components/Chat.tsx; do
+                   web/LICENSE \
+                   "web/src/app/api/[..._path]/route.ts" \
+                   web/src/providers/Stream.tsx; do
             test -f "ci-check/$f" || { echo "missing: $f"; exit 1; }
           done
-          # The bug that shipped in 0.1.0: a relative apiUrl throws in the SDK.
-          grep -q "window.location.origin" ci-check/web/app/components/Chat.tsx
+          # The vendored chat shows a setup form unless both values are present,
+          # so their absence would silently regress the first-run experience.
+          grep -q "NEXT_PUBLIC_API_URL=/api" ci-check/web/.env.example
+          grep -q "NEXT_PUBLIC_ASSISTANT_ID=agent" ci-check/web/.env.example
 
   frontend:
-    name: frontend typecheck + build (${{ matrix.ui }})
+    name: frontend typecheck + build
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        # ai-elements is excluded: its vendored components currently fail
-        # typecheck on an upstream shiki conflict. See CHANGELOG "Known issues".
-        ui: [assistant-ui, minimal]
     steps:
       - uses: actions/checkout@v4
 
@@ -102,7 +101,7 @@ jobs:
         run: uv sync --extra dev
 
       - name: Scaffold
-        run: uv run langctl new web-check --yes --ui ${{ matrix.ui }} --no-install --no-git
+        run: uv run langctl new web-check --yes --no-install --no-git
 
       - name: Install frontend dependencies
         working-directory: web-check/web

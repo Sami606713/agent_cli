@@ -80,8 +80,10 @@ jobs:
           print(f"{wheel}: {len(templates)} template files")
           required = [
               "langctl/templates/backend/python/src/__pkg__/agent.py.j2",
-              "langctl/templates/frontend/_shared/app/__proxy_route_dir__/[...path]/route.ts.j2",
-              "langctl/templates/frontend/nextjs_assistant_ui/app/components/Chat.tsx.j2",
+              "langctl/templates/backend/python/src/__pkg__/middleware/__init__.py.j2",
+              "langctl/templates/frontend/agent_chat_ui/package.json.j2",
+              "langctl/templates/frontend/agent_chat_ui/src/providers/Stream.tsx",
+              "langctl/templates/frontend/agent_chat_ui/src/app/api/[..._path]/route.ts",
           ]
           missing = [r for r in required if r not in names]
           if missing:
