@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-08-12
+
+### Added
+
+- `langctl new` now asks about memory, using progressive disclosure: long-term
+  memory is simply on (it costs nothing and needs no services), semantic search
+  is one yes/no question, and only if you say yes are you asked how embeddings
+  are produced. Asked *after* the chat provider, because the embeddings default
+  depends on it — and choosing Anthropic warns that it has no embeddings API, so
+  search means a second vendor and key.
+- Non-interactive equivalents for CI and scripting: `--memory/--no-memory`,
+  `--semantic-search`, `--embeddings {local,provider,custom}`,
+  `--embedding-model`.
+
+### Fixed
+
+- **`langctl sync` now updates `pyproject.toml` dependencies**, not just
+  `langgraph.json`. Turning on semantic search in `agent.yaml` previously left
+  the embeddings package uninstalled, producing a project that passes
+  `langgraph validate` and then dies at server startup with a
+  ModuleNotFoundError. `sync --check` exits non-zero on dependency drift, so CI
+  catches it. Only the `dependencies` array is rewritten; hand-added packages
+  and every other section are left untouched.
+
+
 ## [0.3.0] - 2026-08-12
 
 ### Added
@@ -120,7 +145,8 @@ application.
   `SIG_IGN` from non-interactive shells, so `except KeyboardInterrupt` never
   fired. Both left `langgraph dev` and `next dev` orphaned holding their ports.
 
-[Unreleased]: https://github.com/Sami606713/agent_cli/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/Sami606713/agent_cli/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/Sami606713/agent_cli/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/Sami606713/agent_cli/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/Sami606713/agent_cli/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/Sami606713/agent_cli/releases/tag/v0.1.0

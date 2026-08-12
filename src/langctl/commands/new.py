@@ -13,6 +13,7 @@ from rich.panel import Panel
 from rich.prompt import Confirm, Prompt
 
 from ..core.errors import LangctlError
+from ..core.memory_wizard import EMBEDDING_MODES, ask_memory, memory_from_flags
 from ..core.node_cli import add_ai_elements
 from ..core.scaffold import scaffold
 from ..core.spec import AgentSpec
@@ -112,6 +113,16 @@ def new(
     ui: str = typer.Option(
         None, "--ui", help=f"Chat UI: {', '.join(UI_CHOICES)}. Default: assistant-ui."
     ),
+    memory: bool = typer.Option(
+        None, "--memory/--no-memory", help="Long-term memory. Default: enabled."
+    ),
+    semantic_search: bool = typer.Option(
+        None, "--semantic-search/--no-semantic-search", help="Recall memories by meaning."
+    ),
+    embeddings: str = typer.Option(
+        None, "--embeddings", help=f"Embeddings mode: {', '.join(EMBEDDING_MODES)}."
+    ),
+    embedding_model: str = typer.Option(None, "--embedding-model"),
     yes: bool = typer.Option(False, "--yes", "-y", help="Accept defaults, ask nothing."),
     install: bool = typer.Option(True, "--install/--no-install"),
     git: bool = typer.Option(True, "--git/--no-git"),
@@ -161,12 +172,32 @@ def new(
         )
     model_name = model_name or MODEL_DEFAULTS.get(model_provider, "claude-opus-5")
 
+    # Asked after the chat provider is known: the embeddings default depends on
+    # it, and Anthropic in particular has no embeddings API of its own.
+    flags_given = memory is not None or semantic_search is not None or embeddings is not None
+    if yes or flags_given:
+        if embeddings is not None and embeddings not in EMBEDDING_MODES:
+            raise LangctlError(
+                f"Unknown --embeddings value {embeddings!r}",
+                fix=f"Choose one of: {', '.join(EMBEDDING_MODES)}",
+            )
+        memory_config = memory_from_flags(
+            model_provider,
+            memory_enabled=True if memory is None else memory,
+            semantic_search=bool(semantic_search),
+            embeddings_mode=embeddings,
+            embedding_model=embedding_model,
+        )
+    else:
+        memory_config = ask_memory(model_provider)
+
     spec = AgentSpec(
         name=name,
         runtime=runtime,  # type: ignore[arg-type]
         mode="proxy",
         model={"provider": model_provider, "name": model_name},  # type: ignore[arg-type]
         frontend={"enabled": frontend, "kind": frontend_kind},  # type: ignore[arg-type]
+        memory=memory_config,  # type: ignore[arg-type]
         observability={"langsmith": True, "project": name},  # type: ignore[arg-type]
     )
 
