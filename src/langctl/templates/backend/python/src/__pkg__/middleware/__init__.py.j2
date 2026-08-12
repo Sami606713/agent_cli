@@ -6,8 +6,8 @@ mean raw content had already reached the summarizing model. The grouping below
 is what langctl enforces.
 
 Regenerated from agent.yaml by `langctl sync` — change settings there, not here.
-Custom classes live in custom.py and always run last, so they see a fully
-prepared request.
+Custom classes live one-per-module under `custom/` and always run last, so they
+see a fully prepared request.
 """
 
 from __future__ import annotations
@@ -17,9 +17,7 @@ from {{ module }} import {{ names }}
 {% endfor %}
 {% if middleware_custom %}
 
-{% for entry in middleware_custom %}
-from {{ pkg }}.middleware.custom import {{ entry.cls }}
-{% endfor %}
+from {{ pkg }}.middleware.custom import {{ middleware_custom_names }}
 {% endif %}
 
 MIDDLEWARE = [
@@ -32,10 +30,12 @@ MIDDLEWARE = [
 {% endif %}
     {{ entry.expression }},
 {% endfor %}
-{% for entry in middleware_custom %}
+{% if middleware_custom %}
     # custom
+{% for entry in middleware_custom %}
     {{ entry.cls }}(),
 {% endfor %}
+{% endif %}
 ]
 
 __all__ = ["MIDDLEWARE"]

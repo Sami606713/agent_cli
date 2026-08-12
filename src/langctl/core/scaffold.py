@@ -98,7 +98,11 @@ def middleware_context(spec: AgentSpec) -> dict[str, Any]:
     return {
         "middleware_imports": imports,
         "middleware_entries": rendered,
+        # Execution order follows agent.yaml, but imports and __all__ are sorted
+        # so the generated package passes the ruff config it ships with.
         "middleware_custom": custom,
+        "middleware_custom_sorted": sorted(custom, key=lambda entry: entry["name"]),
+        "middleware_custom_names": _import_names(sorted(e["cls"] for e in custom)),
         "middleware_enabled": [m.key for m in entries],
     }
 

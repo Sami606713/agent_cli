@@ -129,7 +129,9 @@ class TestGeneratedProject:
     def test_middleware_package_is_written(self, tmp_path):
         scaffold(spec(), tmp_path)
         assert (tmp_path / "src/demo_agent/middleware/__init__.py").is_file()
-        assert (tmp_path / "src/demo_agent/middleware/custom.py").is_file()
+        # custom middleware is a package, one module per class — like tools/.
+        assert (tmp_path / "src/demo_agent/middleware/custom/__init__.py").is_file()
+        assert not (tmp_path / "src/demo_agent/middleware/custom.py").exists()
 
     def test_agent_receives_the_list(self, tmp_path):
         scaffold(spec(), tmp_path)
@@ -179,3 +181,60 @@ class TestCustomScaffold:
         source = render("x")
         for hook in ("before_agent", "wrap_model_call", "wrap_tool_call", "after_agent"):
             assert hook in source
+
+
+class TestCustomPackage:
+    """One module per custom middleware, mirroring tools/.
+
+    A shared custom.py becomes a merge-conflict site the moment two people add
+    one, and grows without bound.
+    """
+
+    def build(self, tmp_path, *names, with_builtins: bool = False):
+        # Passing a `middleware` block replaces the defaults entirely — explicit
+        # config wins — so built-ins are opted into here when the test needs them.
+        block: dict = {"custom": list(names)}
+        if with_builtins:
+            block.update(default_config())
+        s = AgentSpec(
+            name="demo-agent",
+            frontend={"enabled": False, "kind": "none"},
+            middleware=block,
+        )
+        scaffold(s, tmp_path)
+        return s
+
+    def test_registry_imports_every_class(self, tmp_path):
+        self.build(tmp_path, "rate_limit", "audit_log")
+        registry = (tmp_path / "src/demo_agent/middleware/custom/__init__.py").read_text()
+        assert "from demo_agent.middleware.custom.rate_limit import RateLimitMiddleware" in registry
+        assert "from demo_agent.middleware.custom.audit_log import AuditLogMiddleware" in registry
+
+    def test_imports_and_all_are_sorted(self, tmp_path):
+        # The generated project lints itself; unsorted imports fail its own ruff.
+        self.build(tmp_path, "rate_limit", "audit_log")
+        registry = (tmp_path / "src/demo_agent/middleware/custom/__init__.py").read_text()
+        assert registry.index("audit_log import") < registry.index("rate_limit import")
+        assert registry.index('"AuditLogMiddleware"') < registry.index('"RateLimitMiddleware"')
+
+    def test_execution_order_follows_agent_yaml_not_the_alphabet(self, tmp_path):
+        # Imports are sorted for lint; the run order stays the user's.
+        s = self.build(tmp_path, "rate_limit", "audit_log")
+        top = (tmp_path / "src/demo_agent/middleware/__init__.py").read_text()
+        assert top.index("RateLimitMiddleware(),") < top.index("AuditLogMiddleware(),")
+        assert s.middleware.custom == ["rate_limit", "audit_log"]
+
+    def test_custom_runs_after_every_builtin(self, tmp_path):
+        self.build(tmp_path, "rate_limit", with_builtins=True)
+        top = (tmp_path / "src/demo_agent/middleware/__init__.py").read_text()
+        assert top.index("ToolRetryMiddleware") < top.index("RateLimitMiddleware()")
+
+    def test_one_custom_label_not_one_per_entry(self, tmp_path):
+        self.build(tmp_path, "rate_limit", "audit_log", with_builtins=True)
+        top = (tmp_path / "src/demo_agent/middleware/__init__.py").read_text()
+        assert top.count("    # custom") == 1
+
+    def test_no_custom_means_no_import(self, tmp_path):
+        self.build(tmp_path)
+        top = (tmp_path / "src/demo_agent/middleware/__init__.py").read_text()
+        assert "middleware.custom import" not in top

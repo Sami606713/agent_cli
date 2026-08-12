@@ -344,26 +344,29 @@ def add_middleware(
 
 
 def _add_custom_middleware(project: Project, name: str) -> None:
+    """Write one module per middleware, mirroring how tools/ works.
+
+    A file each rather than a shared module: middleware grow, and a single
+    custom.py becomes a merge-conflict site the moment two people add one.
+    """
     key = module_key(name)
-    target = project.root / "src" / project.spec.package_name / "middleware" / "custom.py"
-    if not target.is_file():
+    package = project.root / "src" / project.spec.package_name / "middleware" / "custom"
+    if not package.is_dir():
         raise LangctlError(
-            f"No middleware package at {target.parent}",
+            f"No custom middleware package at {package}",
             fix="This project predates middleware support. Run `langctl sync` first.",
         )
 
     cls = class_name(key)
-    source = target.read_text(encoding="utf-8")
-    if f"class {cls}(" in source:
-        raise LangctlError(f"{cls} already exists in custom.py", fix="Pick another name.")
+    target = package / f"{key}.py"
+    if target.exists():
+        raise LangctlError(
+            f"middleware/custom/{target.name} already exists",
+            fix="Pick another name, or edit that file.",
+        )
 
-    # Append rather than overwrite: custom.py is the user's file.
-    body = render_custom(key)
-    body = body.split('from langchain.agents.middleware import AgentMiddleware\n', 1)[1]
-    if "from langchain.agents.middleware import AgentMiddleware" not in source:
-        source += "\nfrom langchain.agents.middleware import AgentMiddleware\n"
-    target.write_text(source.rstrip() + "\n\n\n" + body.lstrip(), encoding="utf-8")
-    console.print(f"  [green]+[/green] middleware/custom.py :: {cls}")
+    target.write_text(render_custom(key), encoding="utf-8")
+    console.print(f"  [green]+[/green] middleware/custom/{target.name} :: {cls}")
 
     block = project.spec.middleware.model_dump()
     block.setdefault("custom", [])

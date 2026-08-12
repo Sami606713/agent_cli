@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.1] - 2026-08-13
+
+### Changed
+
+- Custom middleware is now a **package with one module per class**
+  (`middleware/custom/rate_limit.py`) rather than everything appended to a
+  single `custom.py`, mirroring how `tools/` already works. A shared module
+  becomes a merge-conflict site as soon as two people add one, and grows without
+  bound.
+- The generated `custom/__init__.py` re-exports every class, with imports and
+  `__all__` sorted so the package passes the `ruff` config it ships with.
+  Execution order still follows `agent.yaml`, not the alphabet.
+- The `# custom` label is emitted once rather than once per entry.
+
+
 ## [0.8.0] - 2026-08-12
 
 ### Added
@@ -263,7 +278,8 @@ application.
   `SIG_IGN` from non-interactive shells, so `except KeyboardInterrupt` never
   fired. Both left `langgraph dev` and `next dev` orphaned holding their ports.
 
-[Unreleased]: https://github.com/Sami606713/agent_cli/compare/v0.8.0...HEAD
+[Unreleased]: https://github.com/Sami606713/agent_cli/compare/v0.8.1...HEAD
+[0.8.1]: https://github.com/Sami606713/agent_cli/compare/v0.8.0...v0.8.1
 [0.8.0]: https://github.com/Sami606713/agent_cli/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/Sami606713/agent_cli/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/Sami606713/agent_cli/compare/v0.5.0...v0.6.0

@@ -1,0 +1,22 @@
+"""Your own middleware.
+
+One class per module, mirroring `tools/`: adding middleware means adding a file
+here and one line to this registry, never editing the built-in wiring.
+
+    langctl add middleware --custom rate_limit
+
+`langctl sync` regenerates the imports below from `middleware.custom` in
+agent.yaml, so a class listed there is always importable from this package.
+"""
+
+from __future__ import annotations
+
+{% for entry in middleware_custom_sorted %}
+from {{ pkg }}.middleware.custom.{{ entry.name }} import {{ entry.cls }}
+{% endfor %}
+
+__all__ = [
+{% for entry in middleware_custom_sorted|sort(attribute="cls") %}
+    "{{ entry.cls }}",
+{% endfor %}
+]
