@@ -47,6 +47,36 @@ def _report(written: list, skipped: list) -> None:
             console.print(f"    [dim]· {path.name}[/dim]")
 
 
+def _warn_shadowed_modules(project: Project) -> None:
+    """Flag a legacy `X.py` now shadowed by a new `X/` package.
+
+    Projects scaffolded before 0.3 kept tools and prompts as single modules.
+    Adding a feature renders the package form beside them, and Python resolves
+    the package first — so the old file stays on disk, is never imported, and
+    silently ignores every edit made to it. Nothing errors; the code just has
+    no effect, which is the worst way to find out.
+    """
+    package_dir = project.root / "src" / project.spec.package_name
+    shadowed = [
+        module
+        for name in ("tools", "prompts", "memory")
+        if (module := package_dir / f"{name}.py").is_file() and (package_dir / name).is_dir()
+    ]
+    if not shadowed:
+        return
+
+    console.print(
+        "\n[yellow]![/yellow] These files are now shadowed by a package of the "
+        "same name and will never be imported:"
+    )
+    for module in shadowed:
+        console.print(f"    [dim]{module.relative_to(project.root)}[/dim]")
+    console.print(
+        "  [dim]Move anything you still need into the package, then delete "
+        "them. Editing them has no effect.[/dim]"
+    )
+
+
 def _apply(project: Project, old: AgentSpec, spec: AgentSpec) -> None:
     """Write derived files for a changed spec.
 

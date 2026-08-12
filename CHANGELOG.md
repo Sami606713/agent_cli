@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-08-12
+
+### Added
+
+- `langctl share` — puts the locally running app on a public URL through
+  cloudflared or ngrok. **One** tunnel covers the whole app: because the browser
+  reaches the agent through the frontend's proxy, exposing the frontend is
+  enough, and the agent port and API keys never become reachable from outside.
+  `--backend-only` exposes the agent API instead, and warns first.
+  cloudflared is preferred because its quick tunnels need no account.
+- `ProcessSpec.on_line` and `ProcessSpec.echo` on the supervisor, so a process's
+  output can be scraped for a value it only announces in prose (a tunnel URL)
+  without flooding the console.
+- `tests/e2e/share_tunnel.sh` — runs a live tunnel and checks the public URL
+  serves the app, the agent answers through the proxy, and SIGTERM releases both
+  ports with no stray tunnel client.
+
+### Changed
+
+- README rewritten: full command reference, the memory model and why the two
+  memories have opposite defaults, upgrading older projects, and an explicit
+  note that `langctl deploy` is **not built yet** rather than implying it exists.
+
+
 ## [0.6.0] - 2026-08-12
 
 ### Added
@@ -199,7 +223,8 @@ application.
   `SIG_IGN` from non-interactive shells, so `except KeyboardInterrupt` never
   fired. Both left `langgraph dev` and `next dev` orphaned holding their ports.
 
-[Unreleased]: https://github.com/Sami606713/agent_cli/compare/v0.6.0...HEAD
+[Unreleased]: https://github.com/Sami606713/agent_cli/compare/v0.7.0...HEAD
+[0.7.0]: https://github.com/Sami606713/agent_cli/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/Sami606713/agent_cli/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/Sami606713/agent_cli/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/Sami606713/agent_cli/compare/v0.3.0...v0.4.0

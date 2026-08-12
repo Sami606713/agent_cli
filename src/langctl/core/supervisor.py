@@ -56,6 +56,12 @@ class ProcessSpec:
     health_timeout: float = 90.0
     #: Human-readable hint shown if this process fails to become healthy.
     ready_hint: str | None = None
+    #: Called with every output line. Used to scrape a value a process only
+    #: announces in prose — a tunnel's public URL, for instance.
+    on_line: Callable[[str], None] | None = None
+    #: When False, output is captured for the crash report but not printed.
+    #: Tunnel clients are chatty and their logs bury the app's own output.
+    echo: bool = True
 
 
 class ManagedProcess:
@@ -114,7 +120,12 @@ class ManagedProcess:
             for line in self.popen.stdout:
                 line = line.rstrip("\n")
                 self._tail.append(line)
-                if self._stopping.is_set():
+                if self.spec.on_line is not None:
+                    try:
+                        self.spec.on_line(line)
+                    except Exception:
+                        pass  # an observer must never kill the log pump
+                if self._stopping.is_set() or not self.spec.echo:
                     continue
                 # Rich's console is not reentrant across threads; serialise writes
                 # so two children cannot interleave mid-line.

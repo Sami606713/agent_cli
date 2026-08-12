@@ -12,6 +12,7 @@ from .commands.add import app as add_app
 from .commands.dev import dev
 from .commands.doctor import doctor
 from .commands.new import new
+from .commands.share import share
 from .commands.sync import sync
 from .core.errors import LangctlError
 
@@ -27,6 +28,7 @@ cli = typer.Typer(
 cli.command("new")(new)
 cli.add_typer(add_app)
 cli.command("dev")(dev)
+cli.command("share")(share)
 cli.command("sync")(sync)
 cli.command("doctor")(doctor)
 
