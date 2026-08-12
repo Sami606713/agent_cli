@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import pytest
 
+from langctl.core.deps import required_env_vars
 from langctl.core.memory_wizard import memory_from_flags
 from langctl.core.pyproject import (
     current_dependencies,
@@ -52,6 +53,21 @@ class TestFlags:
                                 embeddings_mode="provider", embedding_model=None)
         spec = AgentSpec(name="demo-agent", memory=cfg)
         assert spec.memory.long_term.embeddings.dims
+
+
+class TestBackendChoice:
+    def test_sqlite_is_the_default(self):
+        cfg = memory_from_flags("anthropic", memory_enabled=True, semantic_search=False,
+                                embeddings_mode=None, embedding_model=None)
+        assert cfg["long_term"]["backend"] == "sqlite"
+
+    def test_postgres_can_be_selected(self):
+        cfg = memory_from_flags("anthropic", memory_enabled=True, semantic_search=False,
+                                embeddings_mode=None, embedding_model=None,
+                                backend="postgres")
+        spec = AgentSpec(name="demo-agent", memory=cfg)
+        assert spec.memory.long_term.backend == "postgres"
+        assert "POSTGRES_URI" in required_env_vars(spec)
 
 
 class TestPyprojectSync:

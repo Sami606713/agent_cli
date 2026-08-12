@@ -129,6 +129,92 @@ def _config_check(root: Path) -> Check:
     )
 
 
+def _memory_check(spec: AgentSpec, root: Path) -> Check | None:
+    """Postgres memory fails at server startup, not at config time.
+
+    `langgraph validate` cannot see a bad or missing POSTGRES_URI, so the first
+    signal would otherwise be the server dying during boot.
+    """
+    long_term = spec.memory.long_term
+    if not long_term.enabled:
+        return Check("memory", OK, "disabled")
+
+    if long_term.backend != "postgres":
+        return Check("memory", OK, f"{long_term.backend} at {long_term.path}")
+
+    uri = os.getenv("POSTGRES_URI") or _env_file_value(root / ".env", "POSTGRES_URI")
+    if not uri:
+        return Check(
+            "memory (postgres)", FAIL, "POSTGRES_URI is not set",
+            "Add POSTGRES_URI=postgresql://user:pass@host:5432/db to .env",
+        )
+
+    # psycopg3 rejects a SQLAlchemy driver prefix; the generated store strips it,
+    # so strip it here too rather than reporting a false failure.
+    for prefix in ("postgresql+asyncpg://", "postgresql+psycopg://", "postgresql+psycopg2://"):
+        if uri.startswith(prefix):
+            uri = uri.replace(prefix, "postgresql://", 1)
+            break
+
+    # Probe with the *project's* interpreter, not langctl's. psycopg is a
+    # dependency of the generated project; langctl's own environment neither
+    # has it nor should. Checking `import psycopg` here would report a failure
+    # for a project that works perfectly.
+    interpreter = _project_python(root)
+    if interpreter is None:
+        return Check(
+            "memory (postgres)", WARN, "cannot verify (no project venv)",
+            "Run `uv sync`, then `langctl doctor` again.",
+        )
+
+    probe = (
+        "import sys\n"
+        "try:\n"
+        "    import psycopg\n"
+        "except ImportError:\n"
+        "    sys.exit(2)\n"
+        "try:\n"
+        f"    psycopg.connect({uri!r}, connect_timeout=5).close()\n"
+        "except Exception as exc:\n"
+        "    sys.stderr.write(type(exc).__name__)\n"
+        "    sys.exit(3)\n"
+    )
+    result = subprocess.run(
+        [str(interpreter), "-c", probe], capture_output=True, text=True, timeout=20
+    )
+    if result.returncode == 0:
+        return Check("memory (postgres)", OK, "reachable")
+    if result.returncode == 2:
+        return Check(
+            "memory (postgres)", FAIL, "psycopg is not installed in the project",
+            "Run `uv sync` — langgraph-checkpoint-postgres provides it.",
+        )
+    return Check(
+        "memory (postgres)", FAIL, f"cannot connect: {result.stderr.strip() or 'unknown'}",
+        "Check POSTGRES_URI and that the server is running.",
+    )
+
+
+def _project_python(root: Path) -> Path | None:
+    """The project's interpreter, mirroring how find_langgraph resolves its CLI."""
+    name = "python.exe" if sys.platform == "win32" else "python"
+    for venv in (".venv", "venv"):
+        candidate = root / venv / ("Scripts" if sys.platform == "win32" else "bin") / name
+        if candidate.is_file():
+            return candidate
+    return None
+
+
+def _env_file_value(path: Path, key: str) -> str | None:
+    if not path.is_file():
+        return None
+    for line in path.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if line.startswith(f"{key}=") and len(line) > len(key) + 1:
+            return line.split("=", 1)[1].strip()
+    return None
+
+
 def _project_checks() -> list[Check]:
     try:
         root = find_project_root()
@@ -164,6 +250,10 @@ def _project_checks() -> list[Check]:
             if (web / "node_modules").is_dir()
             else Check("frontend deps", FAIL, "node_modules missing", "cd web && npm install")
         )
+
+    memory_check = _memory_check(spec, root)
+    if memory_check:
+        checks.append(memory_check)
 
     checks.append(_port(spec.backend.port, "agent"))
     if spec.frontend.enabled:

@@ -165,3 +165,40 @@ class TestLegacyMigration:
     def test_store_none_disables_long_term(self):
         s = AgentSpec.from_yaml("name: demo-agent\nmemory:\n  store: none\n")
         assert s.memory.long_term.enabled is False
+
+
+class TestPostgresBackend:
+    """Verified against a real Postgres 16 container, not just rendered."""
+
+    def build(self, tmp_path):
+        spec = AgentSpec(name="demo-agent", frontend={"enabled": False, "kind": "none"},
+                         memory={"long_term": {"backend": "postgres"}})
+        scaffold(spec, tmp_path)
+        return spec
+
+    def test_postgres_package_and_uri_required(self, tmp_path):
+        spec = self.build(tmp_path)
+        assert any("checkpoint-postgres" in p for p in runtime_packages(spec))
+        assert "POSTGRES_URI" in required_env_vars(spec)
+
+    def test_store_path_still_emitted(self, tmp_path):
+        spec = self.build(tmp_path)
+        # Same wiring as sqlite: the server opens our context manager.
+        assert spec.to_langgraph_config()["store"]["path"].endswith("store.py:generate_store")
+
+    def test_generated_store_strips_sqlalchemy_prefix(self, tmp_path):
+        # psycopg3 rejects `postgresql+psycopg://`; a URI copied from a
+        # SQLAlchemy config would otherwise fail with an opaque parse error.
+        self.build(tmp_path)
+        source = (tmp_path / "src/demo_agent/memory/store.py").read_text()
+        assert "postgresql+asyncpg://" in source
+        assert "_clean_uri" in source
+
+    def test_generated_store_has_both_sync_and_async(self, tmp_path):
+        self.build(tmp_path)
+        source = (tmp_path / "src/demo_agent/memory/store.py").read_text()
+        assert "AsyncPostgresStore" in source
+        assert "PostgresStore" in source
+
+    def test_sqlite_remains_the_default(self):
+        assert AgentSpec(name="demo-agent").memory.long_term.backend == "sqlite"

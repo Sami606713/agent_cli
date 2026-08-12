@@ -57,6 +57,30 @@ its components reference semantic classes. A test enforces this.
 > the failure is entirely in the vendored components. It is excluded from the
 > interactive wizard and reachable only via an explicit `--ui ai-elements`.
 
+## Memory
+
+Long-term memory is on by default and needs nothing running — it uses a local
+SQLite file. Verified against a real restart: without an explicit store,
+`langgraph dev` keeps memories in process and loses them all on exit.
+
+| backend | when | setup |
+|---|---|---|
+| `sqlite` *(default)* | one machine, one process | none |
+| `postgres` | more than one replica, or shared state | set `POSTGRES_URI` |
+
+```bash
+langctl new my-agent                              # sqlite
+langctl new my-agent --memory-backend postgres    # then set POSTGRES_URI in .env
+```
+
+Switching later: edit `agent.yaml`, then `langctl sync && uv sync`. `sync`
+updates `pyproject.toml` too, because a backend without its driver is a startup
+failure `langgraph validate` reports as valid. `langctl doctor` checks that
+Postgres is actually reachable.
+
+Semantic search is off by default (it needs an embeddings vendor and costs per
+item). Enable it with `--semantic-search --embeddings local|provider|custom`.
+
 ## Commands
 
 | Command | What it does |

@@ -59,7 +59,18 @@ check "readable before restart" \
   "$(curl -s -G "http://127.0.0.1:$PORT/store/items" \
       --data-urlencode "namespace=$NS" --data-urlencode "key=$KEY")" "$VALUE"
 
-check "sqlite file created" "$([ -f data/memory.sqlite ] && echo yes || echo no)" "yes"
+# The storage assertion depends on the backend the project chose.
+backend=$(python3 -c "
+import yaml
+print(yaml.safe_load(open('agent.yaml'))['memory']['long_term'].get('backend','sqlite'))" 2>/dev/null)
+echo "  backend: $backend"
+if [ "$backend" = "sqlite" ]; then
+  check "sqlite file created" "$([ -f data/memory.sqlite ] && echo yes || echo no)" "yes"
+else
+  check "store rows written to $backend" \
+    "$(curl -s -G "http://127.0.0.1:$PORT/store/items" \
+        --data-urlencode "namespace=$NS" --data-urlencode "key=$KEY")" "$VALUE"
+fi
 
 echo "--- kill the whole process group and restart"
 kill_server || { echo "--- result: teardown failed"; exit 1; }

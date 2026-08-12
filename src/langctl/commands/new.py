@@ -13,7 +13,12 @@ from rich.panel import Panel
 from rich.prompt import Confirm, Prompt
 
 from ..core.errors import LangctlError
-from ..core.memory_wizard import EMBEDDING_MODES, ask_memory, memory_from_flags
+from ..core.memory_wizard import (
+    EMBEDDING_MODES,
+    MEMORY_BACKENDS,
+    ask_memory,
+    memory_from_flags,
+)
 from ..core.node_cli import add_ai_elements
 from ..core.scaffold import scaffold
 from ..core.spec import AgentSpec
@@ -116,6 +121,9 @@ def new(
     memory: bool = typer.Option(
         None, "--memory/--no-memory", help="Long-term memory. Default: enabled."
     ),
+    memory_backend: str = typer.Option(
+        None, "--memory-backend", help=f"Where memories live: {', '.join(MEMORY_BACKENDS)}."
+    ),
     semantic_search: bool = typer.Option(
         None, "--semantic-search/--no-semantic-search", help="Recall memories by meaning."
     ),
@@ -174,12 +182,22 @@ def new(
 
     # Asked after the chat provider is known: the embeddings default depends on
     # it, and Anthropic in particular has no embeddings API of its own.
-    flags_given = memory is not None or semantic_search is not None or embeddings is not None
+    flags_given = (
+        memory is not None
+        or semantic_search is not None
+        or embeddings is not None
+        or memory_backend is not None
+    )
     if yes or flags_given:
         if embeddings is not None and embeddings not in EMBEDDING_MODES:
             raise LangctlError(
                 f"Unknown --embeddings value {embeddings!r}",
                 fix=f"Choose one of: {', '.join(EMBEDDING_MODES)}",
+            )
+        if memory_backend is not None and memory_backend not in MEMORY_BACKENDS:
+            raise LangctlError(
+                f"Unknown --memory-backend value {memory_backend!r}",
+                fix=f"Choose one of: {', '.join(MEMORY_BACKENDS)}",
             )
         memory_config = memory_from_flags(
             model_provider,
@@ -187,6 +205,7 @@ def new(
             semantic_search=bool(semantic_search),
             embeddings_mode=embeddings,
             embedding_model=embedding_model,
+            backend=memory_backend or "sqlite",
         )
     else:
         memory_config = ask_memory(model_provider)

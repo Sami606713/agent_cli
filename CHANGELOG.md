@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-08-12
+
+### Added
+
+- Postgres as a long-term memory backend, selectable at creation
+  (`--memory-backend postgres`, or the new wizard question). SQLite remains the
+  default. Set `POSTGRES_URI`; the schema is created on first start, so there is
+  no migration step of your own.
+- `langctl doctor` verifies a Postgres backend is actually reachable, and
+  distinguishes "URI not set", "driver not installed", and "cannot connect".
+
+### Fixed
+
+- `doctor` probed for `psycopg` in langctl's own environment rather than the
+  project's, so a working Postgres project was reported as broken. It now runs
+  the probe with the project's interpreter, the same way the `langgraph` binary
+  is resolved.
+
+### Verified
+
+Both backends were tested against a real server, not just rendered: write a
+memory, kill the whole process group, restart, read it back. The Postgres path
+additionally covers the SQLAlchemy `+psycopg` URI prefix that psycopg3 rejects,
+and the missing-`POSTGRES_URI` error message.
+
+
 ## [0.4.0] - 2026-08-12
 
 ### Added
@@ -145,7 +171,8 @@ application.
   `SIG_IGN` from non-interactive shells, so `except KeyboardInterrupt` never
   fired. Both left `langgraph dev` and `next dev` orphaned holding their ports.
 
-[Unreleased]: https://github.com/Sami606713/agent_cli/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/Sami606713/agent_cli/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/Sami606713/agent_cli/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/Sami606713/agent_cli/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/Sami606713/agent_cli/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/Sami606713/agent_cli/compare/v0.1.0...v0.2.0

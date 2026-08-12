@@ -23,6 +23,13 @@ console = Console()
 
 EMBEDDING_MODES = ["local", "provider", "custom"]
 
+MEMORY_BACKENDS = ["sqlite", "postgres"]
+
+BACKEND_SUMMARY = {
+    "sqlite": "a local file — nothing to run, but single-writer and single-machine",
+    "postgres": "a server you provide via POSTGRES_URI — needed for more than one replica",
+}
+
 #: Sensible default model per embeddings provider, so the wizard never has to
 #: ask for a model name whose dimensions we would then have to guess.
 DEFAULT_EMBEDDING_MODEL: dict[str, str] = {
@@ -65,6 +72,17 @@ def ask_memory(chat_provider: str, *, accept_defaults: bool = False) -> dict[str
 
     if not Confirm.ask("  Keep long-term memory enabled?", default=True):
         return {"long_term": {"enabled": False}}
+
+    console.print("\n[bold]Where should memories be stored?[/bold]")
+    for name in MEMORY_BACKENDS:
+        console.print(f"  [cyan]{name:9s}[/cyan] {BACKEND_SUMMARY[name]}")
+    backend = Prompt.ask("  Backend", choices=MEMORY_BACKENDS, default="sqlite")
+    memory["long_term"]["backend"] = backend
+    if backend == "postgres":
+        console.print(
+            "  [dim]Set POSTGRES_URI in .env. The schema is created on first "
+            "start — no migration step of your own.[/dim]"
+        )
 
     console.print(
         "\n[bold]Semantic search[/bold] lets the agent recall memories by meaning "
@@ -136,12 +154,13 @@ def memory_from_flags(
     semantic_search: bool,
     embeddings_mode: str | None,
     embedding_model: str | None,
+    backend: str = "sqlite",
 ) -> dict[str, Any]:
     """Non-interactive equivalent of :func:`ask_memory`, for flags and CI."""
     if not memory_enabled:
         return {"long_term": {"enabled": False}}
 
-    long_term: dict[str, Any] = {"enabled": True, "backend": "sqlite"}
+    long_term: dict[str, Any] = {"enabled": True, "backend": backend}
     if not semantic_search:
         return {"long_term": long_term}
 
