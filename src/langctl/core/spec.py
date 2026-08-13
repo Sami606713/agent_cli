@@ -62,8 +62,56 @@ AGENT_SERVER_PATHS = (
 
 
 class ModelSpec(BaseModel):
-    provider: Literal["anthropic", "openai", "google", "bedrock", "ollama"] = "anthropic"
+    """Which chat model the agent uses.
+
+    `provider` is an open string rather than a fixed set: `init_chat_model`
+    supports 27 providers and gains more, and pinning a Literal here would mean
+    a new LangChain integration could not be used until langctl shipped.
+    Unknown providers are allowed as long as `package` says what supplies them.
+    """
+
+    provider: str = "anthropic"
     name: str = "claude-opus-5"
+    #: OpenAI-compatible endpoint — LM Studio, vLLM, a LiteLLM proxy, or any
+    #: gateway. When set, the model is constructed rather than passed as a
+    #: "provider:model" string, because a string carries no endpoint.
+    base_url: str | None = None
+    #: Override the credential variable, for a gateway with its own key.
+    api_key_env_override: str | None = None
+    #: Required for a provider langctl does not know; ignored otherwise.
+    package: str | None = None
+    #: Extra keyword arguments passed to init_chat_model (temperature, etc).
+    options: dict[str, Any] = Field(default_factory=dict)
+
+    @field_validator("provider")
+    @classmethod
+    def _normalise_provider(cls, v: str) -> str:
+        from .models import normalise
+
+        if not v or not v.strip():
+            raise ValueError("model.provider must not be empty")
+        return normalise(v)
+
+    @model_validator(mode="after")
+    def _known_or_declared(self) -> ModelSpec:
+        from .models import PROVIDERS, get, is_known, suggest
+
+        # Choosing a provider without naming a model should not silently keep
+        # the previous provider's default (e.g. openai + claude-opus-5).
+        if "name" not in self.model_fields_set:
+            known = get(self.provider)
+            if known and known.default_model:
+                self.name = known.default_model
+
+        if is_known(self.provider) or self.package:
+            return self
+        hint = suggest(self.provider)
+        raise ValueError(
+            f"unknown model provider {self.provider!r}. Either use one of the "
+            f"{len(PROVIDERS)} known providers"
+            + (f" (did you mean {' or '.join(hint)}?)" if hint else "")
+            + ", or set model.package so the dependency can be installed."
+        )
 
     @property
     def identifier(self) -> str:
@@ -71,14 +119,28 @@ class ModelSpec(BaseModel):
         return f"{self.provider}:{self.name}"
 
     @property
-    def api_key_env(self) -> str:
-        return {
-            "anthropic": "ANTHROPIC_API_KEY",
-            "openai": "OPENAI_API_KEY",
-            "google": "GOOGLE_API_KEY",
-            "bedrock": "AWS_ACCESS_KEY_ID",
-            "ollama": "OLLAMA_HOST",
-        }[self.provider]
+    def needs_construction(self) -> bool:
+        """True when a plain identifier string cannot express this model."""
+        return bool(self.base_url or self.options)
+
+    @property
+    def api_key_env(self) -> str | None:
+        """Credential variable, or None when the provider needs no key."""
+        if self.api_key_env_override:
+            return self.api_key_env_override
+        from .models import get
+
+        known = get(self.provider)
+        return known.api_key_env if known else None
+
+    @property
+    def package_requirement(self) -> str | None:
+        if self.package:
+            return self.package
+        from .models import get
+
+        known = get(self.provider)
+        return known.package if known else None
 
 
 MemoryBackend = Literal["sqlite", "postgres", "memory"]

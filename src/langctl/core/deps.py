@@ -13,15 +13,6 @@ from __future__ import annotations
 from .middleware import REGISTRY
 from .spec import AgentSpec
 
-#: Chat model provider → package supplying it.
-MODEL_PACKAGES: dict[str, str] = {
-    "anthropic": "langchain-anthropic>=1.0",
-    "openai": "langchain-openai>=1.0",
-    "google": "langchain-google-genai>=2.0",
-    "bedrock": "langchain-aws>=1.0",
-    "ollama": "langchain-ollama>=1.0",
-}
-
 #: Memory backend → package supplying both its saver and its store.
 MEMORY_PACKAGES: dict[str, str | None] = {
     "sqlite": "langgraph-checkpoint-sqlite>=3.0",
@@ -48,7 +39,9 @@ def runtime_packages(spec: AgentSpec) -> list[str]:
     """Third-party packages the generated project needs, deduplicated."""
     packages: list[str] = ["langchain>=1.0", "langgraph>=1.0"]
 
-    provider_package = MODEL_PACKAGES.get(spec.model.provider)
+    # The registry knows 25 providers; an unknown one must declare its package,
+    # so this is never a silent no-op.
+    provider_package = spec.model.package_requirement
     if provider_package:
         packages.append(provider_package)
 
@@ -84,7 +77,11 @@ def runtime_packages(spec: AgentSpec) -> list[str]:
 
 def required_env_vars(spec: AgentSpec) -> dict[str, str]:
     """Env var → why it is needed. Drives .env.example and `langctl doctor`."""
-    required = {spec.model.api_key_env: f"chat model ({spec.model.identifier})"}
+    # Some providers need no key at all — a local runtime, or ambient cloud
+    # credentials — so this can legitimately be empty.
+    required: dict[str, str] = {}
+    if spec.model.api_key_env:
+        required[spec.model.api_key_env] = f"chat model ({spec.model.identifier})"
 
     if spec.memory.short_term.backend == "postgres" or (
         spec.memory.long_term.enabled and spec.memory.long_term.backend == "postgres"

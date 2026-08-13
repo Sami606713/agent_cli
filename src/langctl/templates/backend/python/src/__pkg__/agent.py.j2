@@ -14,7 +14,11 @@ from __future__ import annotations
 
 from langchain.agents import create_agent
 
+{% if model_needs_construction %}
+from {{ pkg }}.config import build_model
+{% else %}
 from {{ pkg }}.config import settings
+{% endif %}
 from {{ pkg }}.memory import get_checkpointer
 from {{ pkg }}.middleware import MIDDLEWARE
 from {{ pkg }}.prompts import SYSTEM_PROMPT
@@ -25,7 +29,11 @@ from {{ pkg }}.tools import TOOLS
 # lifetime matches the server's rather than this module's import.
 
 graph = create_agent(
+{% if model_needs_construction %}
+    model=build_model(),
+{% else %}
     model=settings.model_identifier,
+{% endif %}
     tools=TOOLS,
     system_prompt=SYSTEM_PROMPT,
     middleware=MIDDLEWARE,

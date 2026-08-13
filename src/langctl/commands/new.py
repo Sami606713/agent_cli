@@ -21,6 +21,8 @@ from ..core.memory_wizard import (
     ask_memory,
     memory_from_flags,
 )
+from ..core.models import PROVIDERS, WIZARD_PROVIDERS, is_known, suggest
+from ..core.models import get as get_provider
 from ..core.scaffold import scaffold
 from ..core.spec import AgentSpec
 
@@ -29,11 +31,7 @@ console = Console()
 #: One chat UI: LangChain's own agent-chat-ui, vendored unmodified.
 UI_CHOICES = {"agent-chat-ui": "agent_chat_ui"}
 
-MODEL_DEFAULTS = {
-    "anthropic": "claude-opus-5",
-    "openai": "gpt-5.5",
-    "google": "gemini-2.5-pro",
-}
+
 
 
 def slugify(text: str) -> str:
@@ -79,6 +77,12 @@ def new(
     runtime: str = typer.Option(None, "--runtime", help="python or node."),
     model_provider: str = typer.Option(None, "--model-provider"),
     model_name: str = typer.Option(None, "--model"),
+    model_base_url: str = typer.Option(
+        None, "--model-base-url", help="OpenAI-compatible endpoint (LM Studio, vLLM, a proxy)."
+    ),
+    model_package: str = typer.Option(
+        None, "--model-package", help="Package supplying a provider langctl does not know."
+    ),
     frontend: bool = typer.Option(None, "--frontend/--no-frontend"),
     ui: str = typer.Option(
         None, "--ui", help="Chat UI. Only agent-chat-ui is available."
@@ -136,10 +140,33 @@ def new(
             "anthropic"
             if yes
             else Prompt.ask(
-                "Model provider", choices=list(MODEL_DEFAULTS), default="anthropic"
+                "Model provider",
+                # A prompt listing 25 providers is unusable; the rest stay
+                # reachable through --model-provider.
+                choices=list(WIZARD_PROVIDERS),
+                default="anthropic",
             )
         )
-    model_name = model_name or MODEL_DEFAULTS.get(model_provider, "claude-opus-5")
+    if not is_known(model_provider) and not model_package:
+        hint = suggest(model_provider)
+        raise LangctlError(
+            f"Unknown model provider {model_provider!r}",
+            fix=(
+                (f"Did you mean {' or '.join(hint)}? " if hint else "")
+                + f"Choose one of the {len(PROVIDERS)} known providers, or pass "
+                "--model-package so the dependency can be installed."
+            ),
+        )
+    known = get_provider(model_provider)
+    model_name = model_name or (known.default_model if known else None)
+    if not model_name:
+        raise LangctlError(
+            f"--model is required for {model_provider}",
+            fix="langctl new my-agent --model-provider "
+            f"{model_provider} --model <model-name>",
+        )
+    if known and known.note:
+        console.print(f"[dim]{known.note}[/dim]")
 
     # Asked after the chat provider is known: the embeddings default depends on
     # it, and Anthropic in particular has no embeddings API of its own.
@@ -175,7 +202,12 @@ def new(
         name=name,
         runtime=runtime,  # type: ignore[arg-type]
         mode="proxy",
-        model={"provider": model_provider, "name": model_name},  # type: ignore[arg-type]
+        model={  # type: ignore[arg-type]
+            "provider": model_provider,
+            "name": model_name,
+            **({"base_url": model_base_url} if model_base_url else {}),
+            **({"package": model_package} if model_package else {}),
+        },
         frontend={"enabled": frontend, "kind": frontend_kind},  # type: ignore[arg-type]
         memory=memory_config,  # type: ignore[arg-type]
         observability={"langsmith": True, "project": name},  # type: ignore[arg-type]

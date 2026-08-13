@@ -28,6 +28,11 @@ def render_context(spec: AgentSpec) -> dict[str, Any]:
         "model_provider": spec.model.provider,
         "model_name": spec.model.name,
         "model_key_env": spec.model.api_key_env,
+        "model_base_url": spec.model.base_url,
+        "model_options": spec.model.options,
+        # A "provider:model" string carries no endpoint or options, so those
+        # projects construct the model object instead.
+        "model_needs_construction": spec.model.needs_construction,
         "langsmith": spec.observability.langsmith,
         "langsmith_project": spec.observability.project or spec.name,
         "backend_port": spec.backend.port,

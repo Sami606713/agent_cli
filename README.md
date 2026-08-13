@@ -118,6 +118,50 @@ langctl pre-fills both, so that branch is never reached. The screen is *bypassed
 deleted* — leaving the source byte-identical means re-syncing with upstream is a plain
 diff rather than a merge. `web/VENDORED.md` records the exact commit.
 
+## Models
+
+25 providers, plus anything `init_chat_model` supports:
+
+```bash
+langctl new my-agent --model-provider openai
+langctl new my-agent --model-provider openrouter --model z-ai/glm-5.2
+langctl new my-agent --model-provider ollama              # local, no API key
+```
+
+**A custom endpoint** — LM Studio, vLLM, a LiteLLM proxy, any OpenAI-compatible
+gateway:
+
+```bash
+langctl new my-agent --model-provider openai --model my-model \
+  --model-base-url http://localhost:1234/v1
+```
+
+**A provider langctl does not know** — just say what supplies it:
+
+```bash
+langctl new my-agent --model-provider mycloud --model m1 \
+  --model-package langchain-mycloud
+```
+
+The provider list is open rather than fixed, so a new LangChain integration is
+usable the day it ships instead of waiting on a langctl release. Choosing a
+provider without naming a model picks that provider's default, and providers
+that need no key (Ollama, ambient cloud credentials) do not demand one.
+
+Everything is also editable in `agent.yaml`, including per-model options:
+
+```yaml
+model:
+  provider: openai
+  name: my-model
+  base_url: http://localhost:1234/v1
+  api_key_env_override: MY_GATEWAY_KEY
+  options: {temperature: 0.2}
+```
+
+When `base_url` or `options` are set the model is constructed rather than passed
+as a `provider:model` string, because a string carries neither.
+
 ## Memory
 
 Long-term memory is on by default and needs nothing running. Verified against a real

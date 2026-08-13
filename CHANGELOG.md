@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-08-13
+
+### Added
+
+- **Custom models.** `model.provider` was a fixed list of five; it is now open.
+  25 providers are registered with their package and credential variable
+  (verified against `init_chat_model`), and an unrecognised provider is accepted
+  as long as `model.package` says what supplies it — so a new LangChain
+  integration is usable the day it ships rather than after a langctl release.
+- `--model-base-url` for OpenAI-compatible endpoints (LM Studio, vLLM, a LiteLLM
+  proxy). A `provider:model` string cannot carry an endpoint, so those projects
+  construct the model object and hand that to `create_agent`, which takes either.
+- `--model-package`, `model.api_key_env_override`, and `model.options` for
+  per-model settings such as `temperature`.
+- Provider aliases (`google` → `google_genai`, `azure` → `azure_openai`, …) and
+  a did-you-mean suggestion on a typo.
+
+### Fixed
+
+- Choosing a provider without naming a model kept the previous provider's
+  default, so `--model-provider openai` produced `openai:claude-opus-5`. The
+  model now follows the provider unless named explicitly.
+- Providers that need no API key — Ollama, or anything using ambient cloud
+  credentials — no longer have a key demanded of them at import.
+
+
 ## [0.9.1] - 2026-08-13
 
 ### Fixed
@@ -336,7 +362,8 @@ application.
   `SIG_IGN` from non-interactive shells, so `except KeyboardInterrupt` never
   fired. Both left `langgraph dev` and `next dev` orphaned holding their ports.
 
-[Unreleased]: https://github.com/Sami606713/agent_cli/compare/v0.9.1...HEAD
+[Unreleased]: https://github.com/Sami606713/agent_cli/compare/v0.10.0...HEAD
+[0.10.0]: https://github.com/Sami606713/agent_cli/compare/v0.9.1...v0.10.0
 [0.9.1]: https://github.com/Sami606713/agent_cli/compare/v0.9.0...v0.9.1
 [0.9.0]: https://github.com/Sami606713/agent_cli/compare/v0.8.1...v0.9.0
 [0.8.1]: https://github.com/Sami606713/agent_cli/compare/v0.8.0...v0.8.1
