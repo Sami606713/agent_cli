@@ -18,7 +18,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from .errors import ProjectNotFound
+from ..errors import ProjectNotFound
 from .spec import AgentSpec
 
 SPEC_FILENAME = "agent.yaml"

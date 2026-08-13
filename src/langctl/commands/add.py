@@ -12,23 +12,28 @@ import typer
 from rich.console import Console
 from rich.panel import Panel
 
+from ..core.catalog.middleware import REGISTRY, conflicts_in, missing_config, ordered
 from ..core.errors import LangctlError
-from ..core.manifest import Project
-from ..core.memory_wizard import MEMORY_BACKENDS, ask_memory, memory_from_flags
-from ..core.middleware import REGISTRY, conflicts_in, missing_config, ordered
-from ..core.middleware_scaffold import class_name, module_key
-from ..core.middleware_scaffold import render as render_custom
-from ..core.pyproject import sync_dependencies
-from ..core.render import plan_layers, render_layers
-from ..core.scaffold import (
+from ..core.generate.boilerplate import (
+    TOOL_TEMPLATE,
+    class_name,
+    module_key,
+    module_name,
+    symbol_name,
+)
+from ..core.generate.boilerplate import render as render_custom
+from ..core.generate.pyproject import sync_dependencies
+from ..core.generate.render import plan_layers, render_layers
+from ..core.generate.scaffold import (
     backend_template,
     frontend_templates,
     render_context,
     write_langgraph_config,
 )
-from ..core.spec import AgentSpec
-from ..core.spec_edit import merge_section, register_tool
-from ..core.tool_scaffold import TOOL_TEMPLATE, module_name, symbol_name
+from ..core.project.manifest import Project
+from ..core.project.spec import AgentSpec
+from ..core.project.spec_edit import merge_section, register_tool
+from ..core.wizard.memory import MEMORY_BACKENDS, ask_memory, memory_from_flags
 
 console = Console()
 

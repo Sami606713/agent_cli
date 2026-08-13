@@ -12,19 +12,19 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.prompt import Confirm, Prompt
 
+from ..core.catalog.models import PROVIDERS, WIZARD_PROVIDERS, is_known, suggest
+from ..core.catalog.models import get as get_provider
 from ..core.errors import LangctlError
-from ..core.executables import find as find_executable
-from ..core.executables import package_manager
-from ..core.memory_wizard import (
+from ..core.generate.scaffold import scaffold
+from ..core.project.spec import AgentSpec
+from ..core.runtime.executables import find as find_executable
+from ..core.runtime.executables import package_manager
+from ..core.wizard.memory import (
     EMBEDDING_MODES,
     MEMORY_BACKENDS,
     ask_memory,
     memory_from_flags,
 )
-from ..core.models import PROVIDERS, WIZARD_PROVIDERS, is_known, suggest
-from ..core.models import get as get_provider
-from ..core.scaffold import scaffold
-from ..core.spec import AgentSpec
 
 console = Console()
 
@@ -251,11 +251,15 @@ def new(
         _install(dest)
 
     rel = dest.name if dest.parent == Path.cwd() else str(dest)
+    # Local runtimes and ambient-credential providers have no key to add, so the
+    # step would read "add your None to .env".
+    steps = [f"cd {rel}"]
+    if spec.model.api_key_env:
+        steps.append(f"add your {spec.model.api_key_env} to [cyan].env[/cyan]")
+    steps.append("langctl dev")
     console.print(
         Panel(
-            f"[bold]1.[/bold] cd {rel}\n"
-            f"[bold]2.[/bold] add your {spec.model.api_key_env} to [cyan].env[/cyan]\n"
-            f"[bold]3.[/bold] langctl dev",
+            "\n".join(f"[bold]{i}.[/bold] {s}" for i, s in enumerate(steps, 1)),
             title="[bold]next steps[/bold]",
             border_style="cyan",
             title_align="left",

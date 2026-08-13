@@ -31,7 +31,7 @@ DRIVER = textwrap.dedent(
     import os, sys, time
     from pathlib import Path
     from rich.console import Console
-    from langctl.core.supervisor import ProcessSpec, Supervisor
+    from langctl.core.runtime.supervisor import ProcessSpec, Supervisor
 
     marker = Path(sys.argv[1])
     pidfile = Path(sys.argv[2])

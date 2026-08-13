@@ -13,9 +13,9 @@ import json
 
 import pytest
 
-from langctl.core.render import render_layers
-from langctl.core.scaffold import frontend_templates, render_context, scaffold
-from langctl.core.spec import LEGACY_FRONTEND_KINDS, AgentSpec
+from langctl.core.generate.render import render_layers
+from langctl.core.generate.scaffold import frontend_templates, render_context, scaffold
+from langctl.core.project.spec import LEGACY_FRONTEND_KINDS, AgentSpec
 
 
 def build(tmp_path, **frontend) -> AgentSpec:

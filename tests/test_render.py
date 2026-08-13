@@ -1,9 +1,9 @@
 import pytest
 from jinja2 import UndefinedError
 
-from langctl.core.render import render_tree, substitute_path
-from langctl.core.scaffold import config_drift, merge_langgraph_config, scaffold
-from langctl.core.spec import AgentSpec
+from langctl.core.generate.render import render_tree, substitute_path
+from langctl.core.generate.scaffold import config_drift, merge_langgraph_config, scaffold
+from langctl.core.project.spec import AgentSpec
 
 
 class TestSubstitutePath:

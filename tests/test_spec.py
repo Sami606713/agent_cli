@@ -4,7 +4,7 @@ import pytest
 from pydantic import ValidationError
 
 from langctl.core.errors import SpecError
-from langctl.core.spec import AgentSpec
+from langctl.core.project.spec import AgentSpec
 
 
 def spec(**kw) -> AgentSpec:

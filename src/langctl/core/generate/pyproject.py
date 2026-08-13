@@ -15,8 +15,8 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+from ..project.spec import AgentSpec
 from .deps import runtime_packages
-from .spec import AgentSpec
 
 #: Matches the `dependencies = [ ... ]` array. Non-greedy up to the first
 #: closing bracket at the start of a line, which is how we emit it.

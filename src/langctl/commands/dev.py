@@ -11,12 +11,12 @@ from rich.panel import Panel
 from rich.table import Table
 
 from ..core.errors import BackendStartFailed, LangctlError, MissingDependency, PortInUse
-from ..core.executables import find as find_executable
-from ..core.health import describe_port_holder, find_free_port, is_port_free
-from ..core.langgraph_cli import dev_command, find_langgraph, up_command
-from ..core.manifest import Project
-from ..core.scaffold import write_langgraph_config
-from ..core.supervisor import ProcessSpec, StartupFailure, Supervisor
+from ..core.generate.scaffold import write_langgraph_config
+from ..core.project.manifest import Project
+from ..core.runtime.executables import find as find_executable
+from ..core.runtime.health import describe_port_holder, find_free_port, is_port_free
+from ..core.runtime.langgraph_cli import dev_command, find_langgraph, up_command
+from ..core.runtime.supervisor import ProcessSpec, StartupFailure, Supervisor
 
 console = Console()
 

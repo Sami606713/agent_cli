@@ -31,7 +31,8 @@ from typing import Any
 
 from jinja2 import Environment, StrictUndefined
 
-TEMPLATE_ROOT = Path(__file__).resolve().parent.parent / "templates"
+#: ``src/langctl/templates`` — three levels up from ``core/generate/render.py``.
+TEMPLATE_ROOT = Path(__file__).resolve().parents[2] / "templates"
 
 _PLACEHOLDER = re.compile(r"__([a-z_]+)__")
 

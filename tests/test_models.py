@@ -10,10 +10,10 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
-from langctl.core.deps import required_env_vars, runtime_packages
-from langctl.core.models import PROVIDERS, WIZARD_PROVIDERS, is_known, normalise
-from langctl.core.scaffold import scaffold
-from langctl.core.spec import AgentSpec, ModelSpec
+from langctl.core.catalog.models import PROVIDERS, WIZARD_PROVIDERS, is_known, normalise
+from langctl.core.generate.deps import required_env_vars, runtime_packages
+from langctl.core.generate.scaffold import scaffold
+from langctl.core.project.spec import AgentSpec, ModelSpec
 
 
 def project(tmp_path, **model) -> AgentSpec:
@@ -192,7 +192,7 @@ class TestModelFromEnv:
         assert spec.model_from_env is True
 
     def test_no_model_is_guessed_for_ollama(self):
-        from langctl.core.models import get
+        from langctl.core.catalog.models import get
 
         assert get("ollama").default_model is None
 

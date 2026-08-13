@@ -4,16 +4,16 @@ from __future__ import annotations
 
 import pytest
 
-from langctl.core.deps import required_env_vars
-from langctl.core.memory_wizard import memory_from_flags
-from langctl.core.pyproject import (
+from langctl.core.generate.deps import required_env_vars
+from langctl.core.generate.pyproject import (
     current_dependencies,
     dependency_drift,
     render_dependencies,
     sync_dependencies,
 )
-from langctl.core.scaffold import scaffold
-from langctl.core.spec import AgentSpec
+from langctl.core.generate.scaffold import scaffold
+from langctl.core.project.spec import AgentSpec
+from langctl.core.wizard.memory import memory_from_flags
 
 
 class TestFlags:

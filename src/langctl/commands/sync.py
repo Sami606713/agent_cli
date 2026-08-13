@@ -7,9 +7,9 @@ import json
 import typer
 from rich.console import Console
 
-from ..core.manifest import Project
-from ..core.pyproject import dependency_drift, sync_dependencies
-from ..core.scaffold import config_drift, write_langgraph_config
+from ..core.generate.pyproject import dependency_drift, sync_dependencies
+from ..core.generate.scaffold import config_drift, write_langgraph_config
+from ..core.project.manifest import Project
 
 console = Console()
 

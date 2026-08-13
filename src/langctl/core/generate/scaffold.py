@@ -6,10 +6,10 @@ import json
 from pathlib import Path
 from typing import Any
 
+from ..catalog.middleware import ORDER_LABEL, call_expressions, missing_config, ordered
+from ..project.spec import AgentSpec
 from .deps import required_env_vars, runtime_packages
-from .middleware import ORDER_LABEL, call_expressions, missing_config, ordered
 from .render import render_layers, render_tree
-from .spec import AgentSpec
 
 #: Vercel's Hobby plan caps serverless functions at 60s. Agent runs regularly
 #: exceed that, so this is surfaced in the template rather than buried.

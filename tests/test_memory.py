@@ -10,9 +10,9 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
-from langctl.core.deps import required_env_vars, runtime_packages
-from langctl.core.scaffold import scaffold
-from langctl.core.spec import AgentSpec
+from langctl.core.generate.deps import required_env_vars, runtime_packages
+from langctl.core.generate.scaffold import scaffold
+from langctl.core.project.spec import AgentSpec
 
 
 def spec(**memory) -> AgentSpec:

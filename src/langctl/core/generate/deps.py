@@ -10,8 +10,8 @@ Keeping the mapping here means a template and its requirements cannot drift.
 
 from __future__ import annotations
 
-from .middleware import REGISTRY
-from .spec import AgentSpec
+from ..catalog.middleware import REGISTRY
+from ..project.spec import AgentSpec
 
 #: Memory backend → package supplying both its saver and its store.
 MEMORY_PACKAGES: dict[str, str | None] = {
