@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import pytest
 
-from langctl.core.middleware import (
+from langctl.core.catalog.middleware import (
     EXCLUDED,
     REGISTRY,
     call_expressions,
@@ -18,8 +18,8 @@ from langctl.core.middleware import (
     missing_config,
     ordered,
 )
-from langctl.core.scaffold import middleware_context, scaffold
-from langctl.core.spec import AgentSpec
+from langctl.core.generate.scaffold import middleware_context, scaffold
+from langctl.core.project.spec import AgentSpec
 
 CHAT = "anthropic:claude-opus-5"
 
@@ -160,7 +160,7 @@ class TestGeneratedProject:
 class TestCustomScaffold:
     def test_no_hooks_are_generated(self):
         """The user picks their own hooks; stubbing all six is dead code."""
-        from langctl.core.middleware_scaffold import render
+        from langctl.core.generate.boilerplate import render
 
         source = render("rate limit")
         for hook in ("def before_model", "def after_model", "def wrap_model_call",
@@ -169,14 +169,14 @@ class TestCustomScaffold:
         assert "def __init__" in source
 
     def test_class_name_derivation(self):
-        from langctl.core.middleware_scaffold import class_name
+        from langctl.core.generate.boilerplate import class_name
 
         assert class_name("rate limit") == "RateLimitMiddleware"
         assert class_name("auditLog") == "AuditLogMiddleware"
         assert class_name("my_thing_middleware") == "MyThingMiddleware"
 
     def test_hooks_are_documented_even_though_absent(self):
-        from langctl.core.middleware_scaffold import render
+        from langctl.core.generate.boilerplate import render
 
         source = render("x")
         for hook in ("before_agent", "wrap_model_call", "wrap_tool_call", "after_agent"):

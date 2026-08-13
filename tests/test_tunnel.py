@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import pytest
 
-from langctl.core.tunnel import CLOUDFLARED, NGROK, extract_url, resolve
+from langctl.core.runtime.tunnel import CLOUDFLARED, NGROK, extract_url, resolve
 
 
 class TestUrlExtraction:
@@ -42,16 +42,16 @@ class TestUrlExtraction:
 
 class TestProviderSelection:
     def test_named_provider_is_honoured(self, monkeypatch):
-        monkeypatch.setattr("langctl.core.tunnel.available", lambda: [CLOUDFLARED, NGROK])
+        monkeypatch.setattr("langctl.core.runtime.tunnel.available", lambda: [CLOUDFLARED, NGROK])
         assert resolve("ngrok") is NGROK
 
     def test_cloudflared_wins_by_default(self, monkeypatch):
         # It needs no account, which is the whole reason to prefer it.
-        monkeypatch.setattr("langctl.core.tunnel.available", lambda: [CLOUDFLARED, NGROK])
+        monkeypatch.setattr("langctl.core.runtime.tunnel.available", lambda: [CLOUDFLARED, NGROK])
         assert resolve() is CLOUDFLARED
 
     def test_missing_provider_resolves_to_none(self, monkeypatch):
-        monkeypatch.setattr("langctl.core.tunnel.available", lambda: [])
+        monkeypatch.setattr("langctl.core.runtime.tunnel.available", lambda: [])
         assert resolve() is None
         assert resolve("ngrok") is None
 

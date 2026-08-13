@@ -15,7 +15,7 @@ from typing import Any, Literal
 import yaml
 from pydantic import BaseModel, Field, field_validator, model_validator
 
-from .errors import SpecError
+from ..errors import SpecError
 
 
 def _default_middleware() -> dict[str, Any]:
@@ -24,7 +24,7 @@ def _default_middleware() -> dict[str, Any]:
     Imported lazily: the registry imports nothing from the spec, but keeping the
     call inside a function documents that the registry owns these values.
     """
-    from .middleware import default_config
+    from ..catalog.middleware import default_config
 
     return default_config()
 
@@ -86,7 +86,7 @@ class ModelSpec(BaseModel):
     @field_validator("provider")
     @classmethod
     def _normalise_provider(cls, v: str) -> str:
-        from .models import normalise
+        from ..catalog.models import normalise
 
         if not v or not v.strip():
             raise ValueError("model.provider must not be empty")
@@ -94,7 +94,7 @@ class ModelSpec(BaseModel):
 
     @model_validator(mode="after")
     def _known_or_declared(self) -> ModelSpec:
-        from .models import PROVIDERS, get, is_known, suggest
+        from ..catalog.models import PROVIDERS, get, is_known, suggest
 
         # Choosing a provider without naming a model should not silently keep
         # the previous provider's default (e.g. openai + claude-opus-5).
@@ -132,7 +132,7 @@ class ModelSpec(BaseModel):
         """Credential variable, or None when the provider needs no key."""
         if self.api_key_env_override:
             return self.api_key_env_override
-        from .models import get
+        from ..catalog.models import get
 
         known = get(self.provider)
         return known.api_key_env if known else None
@@ -146,7 +146,7 @@ class ModelSpec(BaseModel):
         against a server langctl never saw. A custom base_url is the same
         situation for the same reason.
         """
-        from .models import get
+        from ..catalog.models import get
 
         known = get(self.provider)
         if known is None:
@@ -157,7 +157,7 @@ class ModelSpec(BaseModel):
     def package_requirement(self) -> str | None:
         if self.package:
             return self.package
-        from .models import get
+        from ..catalog.models import get
 
         known = get(self.provider)
         return known.package if known else None

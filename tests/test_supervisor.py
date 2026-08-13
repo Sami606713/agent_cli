@@ -19,8 +19,8 @@ from pathlib import Path
 import pytest
 from rich.console import Console
 
-from langctl.core.health import find_free_port, is_port_free, wait_for_http
-from langctl.core.supervisor import ProcessSpec, StartupFailure, Supervisor
+from langctl.core.runtime.health import find_free_port, is_port_free, wait_for_http
+from langctl.core.runtime.supervisor import ProcessSpec, StartupFailure, Supervisor
 
 pytestmark = pytest.mark.timeout(60)
 
@@ -275,7 +275,7 @@ class TestPortHelpers:
 
     @pytest.mark.skipif(not shutil.which("ss"), reason="ss not available")
     def test_describe_port_holder_never_raises(self):
-        from langctl.core.health import describe_port_holder
+        from langctl.core.runtime.health import describe_port_holder
 
         assert describe_port_holder(1) is None or isinstance(describe_port_holder(1), str)
 

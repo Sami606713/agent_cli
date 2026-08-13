@@ -19,7 +19,7 @@ from __future__ import annotations
 
 import shutil
 
-from .errors import MissingDependency
+from ..errors import MissingDependency
 
 #: Where to point someone whose tool is missing.
 INSTALL_HINTS: dict[str, str] = {

@@ -13,10 +13,10 @@ from rich.console import Console
 from rich.table import Table
 
 from ..core.errors import MissingDependency
-from ..core.health import describe_port_holder, is_port_free
-from ..core.langgraph_cli import find_langgraph
-from ..core.manifest import find_project_root
-from ..core.spec import AgentSpec
+from ..core.project.manifest import find_project_root
+from ..core.project.spec import AgentSpec
+from ..core.runtime.health import describe_port_holder, is_port_free
+from ..core.runtime.langgraph_cli import find_langgraph
 
 console = Console()
 

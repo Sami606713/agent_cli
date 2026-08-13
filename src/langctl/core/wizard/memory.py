@@ -17,7 +17,7 @@ from typing import Any
 from rich.console import Console
 from rich.prompt import Confirm, Prompt
 
-from .spec import EMBEDDING_DIMS, EMBEDDING_PROVIDER_FOR_CHAT
+from ..project.spec import EMBEDDING_DIMS, EMBEDDING_PROVIDER_FOR_CHAT
 
 console = Console()
 

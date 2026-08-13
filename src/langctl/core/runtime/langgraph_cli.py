@@ -10,7 +10,7 @@ import shutil
 import sys
 from pathlib import Path
 
-from .errors import MissingDependency
+from ..errors import MissingDependency
 
 #: Flags and behaviour verified against langgraph-cli 0.4.x.
 MIN_SUPPORTED = (0, 4)

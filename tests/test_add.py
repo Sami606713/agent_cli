@@ -11,11 +11,11 @@ from __future__ import annotations
 
 import pytest
 
-from langctl.core.render import plan_layers
-from langctl.core.scaffold import backend_template, render_context, scaffold
-from langctl.core.spec import AgentSpec
-from langctl.core.spec_edit import has_comments, merge_section, register_tool
-from langctl.core.tool_scaffold import module_name, symbol_name
+from langctl.core.generate.boilerplate import module_name, symbol_name
+from langctl.core.generate.render import plan_layers
+from langctl.core.generate.scaffold import backend_template, render_context, scaffold
+from langctl.core.project.spec import AgentSpec
+from langctl.core.project.spec_edit import has_comments, merge_section, register_tool
 
 
 def project(tmp_path, **memory) -> AgentSpec:

@@ -19,12 +19,12 @@ from rich.console import Console
 from rich.panel import Panel
 
 from ..core.errors import LangctlError
-from ..core.health import find_free_port, is_port_free
-from ..core.langgraph_cli import dev_command, find_langgraph
-from ..core.manifest import Project
-from ..core.scaffold import write_langgraph_config
-from ..core.supervisor import ProcessSpec, StartupFailure, Supervisor
-from ..core.tunnel import PROVIDERS, available, extract_url, resolve
+from ..core.generate.scaffold import write_langgraph_config
+from ..core.project.manifest import Project
+from ..core.runtime.health import find_free_port, is_port_free
+from ..core.runtime.langgraph_cli import dev_command, find_langgraph
+from ..core.runtime.supervisor import ProcessSpec, StartupFailure, Supervisor
+from ..core.runtime.tunnel import PROVIDERS, available, extract_url, resolve
 
 console = Console()
 

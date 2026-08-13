@@ -21,7 +21,7 @@ import pathlib
 
 import pytest
 
-from langctl.core import executables
+from langctl.core.runtime import executables
 
 SRC = pathlib.Path(executables.__file__).parent.parent
 
@@ -100,8 +100,8 @@ class TestResolver:
 class TestFrontendCommand:
     def test_uses_a_resolved_path(self, tmp_path):
         from langctl.commands.dev import _frontend_command
-        from langctl.core.manifest import Project
-        from langctl.core.spec import AgentSpec
+        from langctl.core.project.manifest import Project
+        from langctl.core.project.spec import AgentSpec
 
         project = Project(root=tmp_path, spec=AgentSpec(name="demo-agent"))
         argv = _frontend_command(project, 3000)
