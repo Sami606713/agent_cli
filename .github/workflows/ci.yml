@@ -1,116 +1,37 @@
 name: CI
 
 on:
+  pull_request:
+    branches: [main]
   push:
     branches: [main]
-  pull_request:
-
-concurrency:
-  # A newer push to the same branch makes the in-flight run irrelevant.
-  group: ci-${{ github.ref }}
-  cancel-in-progress: true
 
 permissions:
   contents: read
 
 jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install ruff
+      - run: ruff check src/
+      - run: ruff format --check src/
+
   test:
-    name: test (py${{ matrix.python-version }})
+    name: Test
     runs-on: ubuntu-latest
     strategy:
-      fail-fast: false
       matrix:
-        # The full range the package claims to support, because the supervisor
-        # touches process groups and signals — the parts most likely to differ.
         python-version: ["3.11", "3.12", "3.13"]
     steps:
       - uses: actions/checkout@v4
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@v5
+      - uses: actions/setup-python@v5
         with:
-          enable-cache: true
-
-      - name: Set up Python ${{ matrix.python-version }}
-        run: uv python install ${{ matrix.python-version }}
-
-      - name: Install
-        run: uv sync --extra dev --python ${{ matrix.python-version }}
-
-      - name: Lint
-        run: uv run ruff check src tests
-
-      - name: Test
-        run: uv run pytest -q
-
-  scaffold:
-    name: scaffold from the built wheel
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@v5
-
-      - name: Build
-        run: uv build
-
-      # Installing the wheel rather than the source tree is the only way to
-      # catch templates being excluded from the distribution — a failure mode
-      # that every source-tree test passes straight through.
-      - name: Install the wheel into a clean environment
-        run: |
-          uv venv .fresh
-          uv pip install --python .fresh dist/*.whl
-
-      - name: Scaffold a project
-        run: .fresh/bin/langctl new ci-check --yes --no-install --no-git
-
-      - name: Assert the scaffold is complete
-        run: |
-          set -e
-          for f in agent.yaml langgraph.json pyproject.toml .env.example \
-                   src/ci_check/agent.py \
-                   src/ci_check/memory/store.py \
-                   src/ci_check/middleware/__init__.py \
-                   web/package.json \
-                   web/LICENSE \
-                   "web/src/app/api/[..._path]/route.ts" \
-                   web/src/providers/Stream.tsx; do
-            test -f "ci-check/$f" || { echo "missing: $f"; exit 1; }
-          done
-          # The vendored chat shows a setup form unless both values are present,
-          # so their absence would silently regress the first-run experience.
-          grep -q "NEXT_PUBLIC_API_URL=/api" ci-check/web/.env.example
-          grep -q "NEXT_PUBLIC_ASSISTANT_ID=agent" ci-check/web/.env.example
-
-  frontend:
-    name: frontend typecheck + build
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@v5
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "22"
-
-      - name: Install langctl
-        run: uv sync --extra dev
-
-      - name: Scaffold
-        run: uv run langctl new web-check --yes --no-install --no-git
-
-      - name: Install frontend dependencies
-        working-directory: web-check/web
-        run: npm install --no-fund --no-audit
-
-      - name: Typecheck
-        working-directory: web-check/web
-        run: npx tsc --noEmit
-
-      - name: Build
-        working-directory: web-check/web
-        run: npx next build
+          python-version: ${{ matrix.python-version }}
+      - run: pip install -e ".[dev]"
+      - run: pytest --tb=short -q

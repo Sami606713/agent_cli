@@ -1,0 +1,37 @@
+name: Welcome New Contributors
+
+on:
+  pull_request_target:
+    types: [opened]
+  issues:
+    types: [opened]
+
+permissions:
+  issues: write
+  pull-requests: write
+
+jobs:
+  welcome:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/first-interaction@v1
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          issue-message: |
+            👋 Thanks for opening your first issue on langctl! We'll take a look soon.
+
+            If this is a bug, please include:
+            - Your OS and Python version
+            - `langctl --version` output
+            - Steps to reproduce
+
+            If this is a feature request, tell us the use case — it helps us prioritize.
+          pr-message: |
+            🎉 Thanks for your first PR to langctl! We appreciate the contribution.
+
+            Before we review:
+            - [ ] Tests pass locally (`pytest`)
+            - [ ] Code is formatted (`ruff format src/`)
+            - [ ] Lint is clean (`ruff check src/`)
+
+            We'll review as soon as we can. Welcome aboard!
