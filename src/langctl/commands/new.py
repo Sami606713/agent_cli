@@ -160,11 +160,25 @@ def new(
     known = get_provider(model_provider)
     model_name = model_name or (known.default_model if known else None)
     if not model_name:
-        raise LangctlError(
-            f"--model is required for {model_provider}",
-            fix="langctl new my-agent --model-provider "
-            f"{model_provider} --model <model-name>",
-        )
+        # No safe default: this provider serves whatever the machine or gateway
+        # has. Ask rather than guess a name that fails on the first message.
+        if yes:
+            raise LangctlError(
+                f"--model is required for {model_provider}",
+                fix="langctl new my-agent --model-provider "
+                f"{model_provider} --model <model-name>",
+            )
+        if model_provider == "ollama":
+            console.print(
+                "\n[dim]ollama serves models you have pulled locally — "
+                "run `ollama list` to see them.[/dim]"
+            )
+        model_name = Prompt.ask(f"Model name for {model_provider}").strip()
+        if not model_name:
+            raise LangctlError(
+                f"A model name is required for {model_provider}",
+                fix=f"Re-run and give a model {model_provider} serves.",
+            )
     if known and known.note:
         console.print(f"[dim]{known.note}[/dim]")
 

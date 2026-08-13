@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.1] - 2026-08-13
+
+### Fixed
+
+- **A model name is no longer guessed for providers that cannot have one.**
+  0.10.0 baked `llama3.2` into the generated `config.py` for Ollama. If you had
+  not pulled that exact model it failed on the first message with an opaque 404,
+  and nothing in `.env.example` suggested changing it.
+
+  Ollama, LiteLLM, HuggingFace, any custom `base_url`, and any provider langctl
+  does not recognise now read `MODEL_NAME` from the environment with no baked-in
+  fallback. `.env.example` lists it as required and seeds the value you chose;
+  the generated config fails at import with a message that names the fix (for
+  Ollama, `ollama list`). Hosted providers keep their default, where guessing is
+  safe.
+
+  `--model` is required for these providers, and the interactive wizard asks for
+  it instead of erroring. A `ModelSpec` for one of them with no name recorded now
+  stores an empty name rather than the previous provider's model, so `agent.yaml`
+  never claims something like `ollama:claude-opus-5`.
+
+
 ## [0.10.0] - 2026-08-13
 
 ### Added
@@ -362,7 +384,8 @@ application.
   `SIG_IGN` from non-interactive shells, so `except KeyboardInterrupt` never
   fired. Both left `langgraph dev` and `next dev` orphaned holding their ports.
 
-[Unreleased]: https://github.com/Sami606713/agent_cli/compare/v0.10.0...HEAD
+[Unreleased]: https://github.com/Sami606713/agent_cli/compare/v0.10.1...HEAD
+[0.10.1]: https://github.com/Sami606713/agent_cli/compare/v0.10.0...v0.10.1
 [0.10.0]: https://github.com/Sami606713/agent_cli/compare/v0.9.1...v0.10.0
 [0.9.1]: https://github.com/Sami606713/agent_cli/compare/v0.9.0...v0.9.1
 [0.9.0]: https://github.com/Sami606713/agent_cli/compare/v0.8.1...v0.9.0

@@ -33,6 +33,9 @@ def render_context(spec: AgentSpec) -> dict[str, Any]:
         # A "provider:model" string carries no endpoint or options, so those
         # projects construct the model object instead.
         "model_needs_construction": spec.model.needs_construction,
+        # Local runtimes and gateways serve whatever they have; the name must
+        # come from the environment rather than a guess compiled into the code.
+        "model_from_env": spec.model.model_from_env,
         "langsmith": spec.observability.langsmith,
         "langsmith_project": spec.observability.project or spec.name,
         "backend_port": spec.backend.port,

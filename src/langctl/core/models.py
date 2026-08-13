@@ -27,7 +27,16 @@ class Provider:
     #: (a local runtime) or uses ambient credentials (cloud SDK config).
     api_key_env: str | None
     #: Default model, so `--model-provider x` alone produces a working project.
+    #: Omitted where guessing is wrong — see model_from_env.
     default_model: str | None = None
+    #: The model name must come from the environment, with no baked-in default.
+    #:
+    #: For a hosted provider a default is a safe guess: everyone with an OpenAI
+    #: key can reach gpt-5.5. For a local runtime or a gateway it is not — the
+    #: model is whatever that machine has pulled or that proxy routes to, so a
+    #: hardcoded name fails on the first message with an opaque 404 from a
+    #: server langctl never saw.
+    model_from_env: bool = False
     note: str | None = None
 
 
@@ -62,11 +71,14 @@ PROVIDERS: dict[str, Provider] = {
         Provider("ibm", "langchain-ibm>=1.0", "WATSONX_APIKEY"),
         Provider("upstage", "langchain-upstage>=1.0", "UPSTAGE_API_KEY"),
         Provider("baseten", "langchain-baseten>=1.0", "BASETEN_API_KEY"),
-        Provider("litellm", "langchain-litellm>=1.0", None,
-                 note="Credentials depend on the model the proxy routes to."),
-        Provider("huggingface", "langchain-huggingface>=1.0", "HUGGINGFACEHUB_API_TOKEN"),
-        Provider("ollama", "langchain-ollama>=1.0", None, "llama3.2",
-                 note="Runs locally; no API key. Needs Ollama running."),
+        Provider("litellm", "langchain-litellm>=1.0", None, model_from_env=True,
+                 note="Set MODEL_NAME to whatever your proxy routes to."),
+        Provider("huggingface", "langchain-huggingface>=1.0", "HUGGINGFACEHUB_API_TOKEN",
+                 model_from_env=True,
+                 note="Set MODEL_NAME to the repo id you want to run."),
+        Provider("ollama", "langchain-ollama>=1.0", None, model_from_env=True,
+                 note="Runs locally; no API key. Set MODEL_NAME to a model you "
+                      "have pulled — check with `ollama list`."),
     )
 }
 

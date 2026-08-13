@@ -54,7 +54,11 @@ class TestModelSpec:
     def test_choosing_a_provider_updates_the_model(self):
         # Otherwise `--model-provider openai` silently keeps claude-opus-5.
         assert ModelSpec(provider="openai").identifier == "openai:gpt-5.5"
-        assert ModelSpec(provider="ollama").identifier == "ollama:llama3.2"
+
+    def test_no_name_is_invented_for_providers_without_a_safe_default(self):
+        # "ollama:claude-opus-5" would be nonsense; the name comes from
+        # MODEL_NAME, so record nothing rather than something false.
+        assert ModelSpec(provider="ollama").name == ""
 
     def test_an_explicit_model_is_respected(self):
         assert ModelSpec(provider="openai", name="gpt-4o").identifier == "openai:gpt-4o"
@@ -134,10 +138,11 @@ class TestDependencyFanOut:
         )
         assert "langchain-mycloud" in runtime_packages(spec)
 
-    def test_keyless_provider_requires_no_env(self):
+    def test_keyless_provider_requires_no_api_key(self):
         spec = AgentSpec(name="demo-agent", model={"provider": "ollama"})
         assert spec.model.api_key_env is None
-        assert required_env_vars(spec) == {}
+        # …but the model name still has to come from somewhere.
+        assert list(required_env_vars(spec)) == ["MODEL_NAME"]
 
     def test_provider_key_is_required(self):
         spec = AgentSpec(name="demo-agent", model={"provider": "groq"})
@@ -159,3 +164,60 @@ class TestGeneratedConfig:
     def test_env_example_lists_the_right_key(self, tmp_path):
         project(tmp_path, provider="openrouter", name="z-ai/glm-5.2")
         assert "OPENROUTER_API_KEY" in (tmp_path / ".env.example").read_text()
+
+
+class TestModelFromEnv:
+    """Some providers have no safe default model.
+
+    A hosted provider does: everyone with an OpenAI key can reach gpt-5.5. A
+    local runtime does not — the model is whatever that machine has pulled, so
+    a name compiled into the code fails on the first message with an opaque 404
+    from a server langctl never saw.
+    """
+
+    @pytest.mark.parametrize("provider", ["ollama", "litellm", "huggingface"])
+    def test_local_and_gateway_providers_read_the_name_from_env(self, provider):
+        assert ModelSpec(provider=provider, name="x").model_from_env is True
+
+    @pytest.mark.parametrize("provider", ["openai", "anthropic", "groq"])
+    def test_hosted_providers_keep_a_default(self, provider):
+        assert ModelSpec(provider=provider).model_from_env is False
+
+    def test_a_custom_endpoint_is_the_same_situation(self):
+        spec = ModelSpec(provider="openai", name="x", base_url="http://localhost:1234/v1")
+        assert spec.model_from_env is True
+
+    def test_unknown_providers_read_from_env(self):
+        spec = ModelSpec(provider="mycloud", name="m1", package="langchain-mycloud")
+        assert spec.model_from_env is True
+
+    def test_no_model_is_guessed_for_ollama(self):
+        from langctl.core.models import get
+
+        assert get("ollama").default_model is None
+
+    def test_model_name_is_a_required_env_var(self):
+        spec = AgentSpec(name="demo-agent", model={"provider": "ollama", "name": "qwen3"})
+        assert "MODEL_NAME" in required_env_vars(spec)
+
+    def test_generated_config_has_no_baked_default(self, tmp_path):
+        project(tmp_path, provider="ollama", name="qwen3")
+        config = (tmp_path / "src/demo_agent/config.py").read_text()
+        assert 'os.getenv("MODEL_NAME", "")' in config
+        assert "qwen3" not in config  # the name lives in .env, not the code
+
+    def test_generated_config_fails_fast_when_unset(self, tmp_path):
+        project(tmp_path, provider="ollama", name="qwen3")
+        config = (tmp_path / "src/demo_agent/config.py").read_text()
+        assert "MODEL_NAME is not set" in config
+        assert "ollama list" in config  # says how to find a valid name
+
+    def test_env_example_seeds_the_chosen_name(self, tmp_path):
+        project(tmp_path, provider="ollama", name="qwen3")
+        env = (tmp_path / ".env.example").read_text()
+        assert "MODEL_NAME=qwen3" in env
+
+    def test_hosted_provider_keeps_the_name_in_code(self, tmp_path):
+        project(tmp_path, provider="openai")
+        config = (tmp_path / "src/demo_agent/config.py").read_text()
+        assert 'os.getenv("MODEL_NAME", "gpt-5.5")' in config

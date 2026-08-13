@@ -125,7 +125,7 @@ diff rather than a merge. `web/VENDORED.md` records the exact commit.
 ```bash
 langctl new my-agent --model-provider openai
 langctl new my-agent --model-provider openrouter --model z-ai/glm-5.2
-langctl new my-agent --model-provider ollama              # local, no API key
+langctl new my-agent --model-provider ollama --model qwen3   # name is required
 ```
 
 **A custom endpoint** — LM Studio, vLLM, a LiteLLM proxy, any OpenAI-compatible
@@ -144,9 +144,15 @@ langctl new my-agent --model-provider mycloud --model m1 \
 ```
 
 The provider list is open rather than fixed, so a new LangChain integration is
-usable the day it ships instead of waiting on a langctl release. Choosing a
-provider without naming a model picks that provider's default, and providers
-that need no key (Ollama, ambient cloud credentials) do not demand one.
+usable the day it ships instead of waiting on a langctl release. Providers that
+need no key (Ollama, ambient cloud credentials) do not demand one.
+
+**Some providers have no safe default model.** A hosted provider does — everyone
+with an OpenAI key can reach `gpt-5.5`. Ollama, LiteLLM, HuggingFace, a custom
+`base_url`, and any provider langctl does not know all serve whatever *your*
+machine or gateway has, so no name is invented for them. `MODEL_NAME` comes from
+`.env`, and the generated `config.py` fails at startup with a clear message
+rather than on the first message with a 404 from a server it never saw.
 
 Everything is also editable in `agent.yaml`, including per-model options:
 

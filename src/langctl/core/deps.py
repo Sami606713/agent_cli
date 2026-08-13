@@ -82,6 +82,9 @@ def required_env_vars(spec: AgentSpec) -> dict[str, str]:
     required: dict[str, str] = {}
     if spec.model.api_key_env:
         required[spec.model.api_key_env] = f"chat model ({spec.model.identifier})"
+    if spec.model.model_from_env:
+        # No safe default exists — see ModelSpec.model_from_env.
+        required["MODEL_NAME"] = f"model served by {spec.model.provider}"
 
     if spec.memory.short_term.backend == "postgres" or (
         spec.memory.long_term.enabled and spec.memory.long_term.backend == "postgres"

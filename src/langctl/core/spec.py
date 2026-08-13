@@ -102,6 +102,10 @@ class ModelSpec(BaseModel):
             known = get(self.provider)
             if known and known.default_model:
                 self.name = known.default_model
+            elif known is None or known.model_from_env:
+                # No safe default exists, so record nothing rather than a name
+                # this provider probably does not serve. MODEL_NAME supplies it.
+                self.name = ""
 
         if is_known(self.provider) or self.package:
             return self
@@ -132,6 +136,22 @@ class ModelSpec(BaseModel):
 
         known = get(self.provider)
         return known.api_key_env if known else None
+
+    @property
+    def model_from_env(self) -> bool:
+        """True when the model name must be read from MODEL_NAME at runtime.
+
+        Local runtimes, gateways and unknown providers serve whatever that
+        machine or proxy has — baking a name in would fail on the first message
+        against a server langctl never saw. A custom base_url is the same
+        situation for the same reason.
+        """
+        from .models import get
+
+        known = get(self.provider)
+        if known is None:
+            return True  # unknown provider: we cannot know what it serves
+        return known.model_from_env or bool(self.base_url)
 
     @property
     def package_requirement(self) -> str | None:
