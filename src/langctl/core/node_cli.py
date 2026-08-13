@@ -37,6 +37,11 @@ def npx_available() -> bool:
     return shutil.which("npx") is not None
 
 
+def _npx_path() -> str | None:
+    """Resolved path — npx is a .cmd shim on Windows and will not spawn by name."""
+    return shutil.which("npx")
+
+
 def run_npx(
     args: list[str],
     cwd: Path,
@@ -51,12 +56,13 @@ def run_npx(
     """
     command = "npx " + " ".join(args)
 
-    if not npx_available():
+    npx = _npx_path()
+    if npx is None:
         return CommandResult(False, command, "", "npx not found (Node.js is not installed)")
 
     try:
         completed = subprocess.run(
-            ["npx", *args],
+            [npx, *args],
             cwd=str(cwd),
             capture_output=True,
             text=True,

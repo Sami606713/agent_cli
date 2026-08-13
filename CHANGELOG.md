@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.1] - 2026-08-13
+
+### Fixed
+
+- **`langctl new` crashed on Windows** with
+  `FileNotFoundError: [WinError 2] The system cannot find the file specified`
+  while installing frontend dependencies. npm, pnpm and npx are installed as
+  `.cmd` shims on Windows, and `CreateProcess` cannot launch those from a bare
+  name — even though the shell can, and even though `shutil.which` finds them.
+  The code checked with `which` but then spawned the unresolved name.
+
+  Every program langctl spawns is now resolved to a full path first
+  (`core/executables.py`), which is what `which` already returned. That covers
+  `npm`, `pnpm`, `npx`, `uv`, `git` and `docker`, in `new`, `dev`, `share`,
+  `doctor` and the Node runner — not only the one call site that was reported.
+
+### Added
+
+- A static test that parses the package and fails if any `subprocess.run` or
+  `Popen` starts with a bare program name. Verified by reintroducing the
+  original bug and watching it fail.
+
+
 ## [0.9.0] - 2026-08-13
 
 ### Changed
@@ -313,7 +336,8 @@ application.
   `SIG_IGN` from non-interactive shells, so `except KeyboardInterrupt` never
   fired. Both left `langgraph dev` and `next dev` orphaned holding their ports.
 
-[Unreleased]: https://github.com/Sami606713/agent_cli/compare/v0.9.0...HEAD
+[Unreleased]: https://github.com/Sami606713/agent_cli/compare/v0.9.1...HEAD
+[0.9.1]: https://github.com/Sami606713/agent_cli/compare/v0.9.0...v0.9.1
 [0.9.0]: https://github.com/Sami606713/agent_cli/compare/v0.8.1...v0.9.0
 [0.8.1]: https://github.com/Sami606713/agent_cli/compare/v0.8.0...v0.8.1
 [0.8.0]: https://github.com/Sami606713/agent_cli/compare/v0.7.0...v0.8.0

@@ -13,13 +13,14 @@ from rich.panel import Panel
 from rich.prompt import Confirm, Prompt
 
 from ..core.errors import LangctlError
+from ..core.executables import find as find_executable
+from ..core.executables import package_manager
 from ..core.memory_wizard import (
     EMBEDDING_MODES,
     MEMORY_BACKENDS,
     ask_memory,
     memory_from_flags,
 )
-from ..core.node_cli import add_ai_elements
 from ..core.scaffold import scaffold
 from ..core.spec import AgentSpec
 
@@ -40,12 +41,13 @@ def slugify(text: str) -> str:
     return re.sub(r"-{2,}", "-", slug)
 
 
-def _install(dest: Path, spec: AgentSpec) -> None:
+def _install(dest: Path) -> None:
     """Install dependencies, but never fail the scaffold over it."""
-    if shutil.which("uv"):
+    uv = find_executable("uv")
+    if uv:
         console.print("[dim]installing python dependencies (uv)…[/dim]")
         result = subprocess.run(
-            ["uv", "sync", "--extra", "dev"], cwd=dest, capture_output=True, text=True
+            [uv, "sync", "--extra", "dev"], cwd=dest, capture_output=True, text=True
         )
         if result.returncode != 0:
             console.print("[yellow]![/yellow] uv sync failed; run it yourself later")
@@ -55,38 +57,20 @@ def _install(dest: Path, spec: AgentSpec) -> None:
 
     web = dest / "web"
     if web.is_dir():
-        pm = "pnpm" if shutil.which("pnpm") else ("npm" if shutil.which("npm") else None)
+        # The resolved path, not the bare name: on Windows npm and pnpm are
+        # .cmd shims, which CreateProcess cannot launch by name.
+        pm = package_manager()
         if pm is None:
             console.print("[yellow]![/yellow] no npm/pnpm found — skipping frontend install")
             return
-        console.print(f"[dim]installing frontend dependencies ({pm})… this takes a minute[/dim]")
+        label = Path(pm).stem
+        console.print(
+            f"[dim]installing frontend dependencies ({label})… this takes a minute[/dim]"
+        )
         result = subprocess.run([pm, "install"], cwd=web, capture_output=True, text=True)
         if result.returncode != 0:
-            console.print(f"[yellow]![/yellow] {pm} install failed; run it yourself in web/")
+            console.print(f"[yellow]![/yellow] {label} install failed; run it yourself in web/")
             console.print(f"[dim]{result.stderr.strip()[:400]}[/dim]")
-            return
-
-        _add_ui_components(spec, web)
-
-
-def _add_ui_components(spec: AgentSpec, web: Path) -> None:
-    """Fetch registry-distributed UI components, if this template needs them.
-
-    AI Elements ships source files through a CLI rather than npm. The call is
-    best-effort by design: offline, proxied, or air-gapped environments still get
-    a complete project, and we print the one command that finishes it.
-    """
-    if spec.frontend.kind != "nextjs_ai_elements":
-        return
-
-    console.print("[dim]adding AI Elements components…[/dim]")
-    result = add_ai_elements(web)
-    if result.ok:
-        console.print("[green]✓[/green] AI Elements components added to web/components/")
-        return
-
-    console.print(f"[yellow]![/yellow] could not add AI Elements components: {result.reason}")
-    console.print(f"[dim]finish later with:[/dim] cd web && {result.manual_hint}")
 
 
 def new(
@@ -213,11 +197,12 @@ def new(
         shutil.copyfile(env_example, dest / ".env")
         console.print("[green]✓[/green] created .env from .env.example")
 
-    if git and shutil.which("git") and not (dest / ".git").exists():
-        subprocess.run(["git", "init", "-q"], cwd=dest, check=False)
+    git_exe = find_executable("git")
+    if git and git_exe and not (dest / ".git").exists():
+        subprocess.run([git_exe, "init", "-q"], cwd=dest, check=False)
 
     if install:
-        _install(dest, spec)
+        _install(dest)
 
     rel = dest.name if dest.parent == Path.cwd() else str(dest)
     console.print(

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import shutil
 import webbrowser
 from urllib.parse import quote
 
@@ -11,7 +10,8 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
-from ..core.errors import BackendStartFailed, LangctlError, PortInUse
+from ..core.errors import BackendStartFailed, LangctlError, MissingDependency, PortInUse
+from ..core.executables import find as find_executable
 from ..core.health import describe_port_holder, find_free_port, is_port_free
 from ..core.langgraph_cli import dev_command, find_langgraph, up_command
 from ..core.manifest import Project
@@ -47,11 +47,20 @@ def _backend_command(project: Project, port: int, docker: bool, tunnel: bool) ->
 
 
 def _frontend_command(project: Project, port: int) -> list[str]:
-    use_pnpm = shutil.which("pnpm") and (project.frontend_dir / "pnpm-lock.yaml").exists()
-    if use_pnpm:
-        return ["pnpm", "dev", "--port", str(port)]
+    """Argv for the frontend dev server, with the binary resolved to a path.
+
+    Resolved rather than named because npm and pnpm ship as `.cmd` shims on
+    Windows, which cannot be launched from a bare name.
+    """
+    pnpm = find_executable("pnpm")
+    if pnpm and (project.frontend_dir / "pnpm-lock.yaml").exists():
+        return [pnpm, "dev", "--port", str(port)]
+
+    npm = find_executable("npm")
+    if npm is None:
+        raise MissingDependency("npm", "Install Node.js 20+: https://nodejs.org")
     # `npm run` needs `--` to pass flags through to the underlying next command.
-    return ["npm", "run", "dev", "--", "--port", str(port)]
+    return [npm, "run", "dev", "--", "--port", str(port)]
 
 
 def _summary(spec_name: str, web_url: str | None, api_url: str, docker: bool) -> Panel:

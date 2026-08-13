@@ -44,10 +44,12 @@ def _version_of(command: list[str]) -> str | None:
     return (result.stdout or result.stderr).strip().splitlines()[0]
 
 
-def _tool(name: str, command: list[str], install: str, required: bool) -> Check:
-    if shutil.which(name) is None:
+def _tool(name: str, args: list[str], install: str, required: bool) -> Check:
+    resolved = shutil.which(name)
+    if resolved is None:
         return Check(name, FAIL if required else WARN, "not found", install)
-    return Check(name, OK, _version_of(command) or "installed")
+    # Spawn the resolved path: on Windows many of these are .cmd shims.
+    return Check(name, OK, _version_of([resolved, *args]) or "installed")
 
 
 def _langgraph_cli(project_root: Path | None = None) -> Check:
@@ -86,15 +88,16 @@ def _langgraph_cli(project_root: Path | None = None) -> Check:
 
 
 def _docker() -> Check:
-    if shutil.which("docker") is None:
+    docker = shutil.which("docker")
+    if docker is None:
         return Check("docker", WARN, "not found", "Only needed for --docker and image builds.")
     try:
-        result = subprocess.run(["docker", "info"], capture_output=True, text=True, timeout=20)
+        result = subprocess.run([docker, "info"], capture_output=True, text=True, timeout=20)
     except subprocess.SubprocessError:
         return Check("docker", WARN, "not responding")
     if result.returncode != 0:
         return Check("docker", WARN, "installed but the daemon is not running", "Start Docker.")
-    return Check("docker", OK, _version_of(["docker", "--version"]) or "running")
+    return Check("docker", OK, _version_of([docker, "--version"]) or "running")
 
 
 def _port(port: int, role: str) -> Check:
@@ -270,12 +273,12 @@ def doctor() -> None:
 
     checks: list[Check] = [
         Check("python", OK, sys.version.split()[0]),
-        _tool("uv", ["uv", "--version"], "curl -LsSf https://astral.sh/uv/install.sh | sh", False),
-        _tool("node", ["node", "-v"], "https://nodejs.org (v20+)", False),
-        _tool("npm", ["npm", "-v"], "ships with node", False),
+        _tool("uv", ["--version"], "curl -LsSf https://astral.sh/uv/install.sh | sh", False),
+        _tool("node", ["-v"], "https://nodejs.org (v20+)", False),
+        _tool("npm", ["-v"], "ships with node", False),
         _langgraph_cli(project_root),
         _docker(),
-        _tool("git", ["git", "--version"], "https://git-scm.com", False),
+        _tool("git", ["--version"], "https://git-scm.com", False),
     ]
     checks += _project_checks()
 
