@@ -23,6 +23,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   that the API is public and unauthenticated. Put a firewall, a VPN, or an
   authenticating proxy in front of it.
 
+- **A SQLite project is moved onto the stack's Postgres before it deploys.**
+  This is a data-loss fix, not tidiness: the memory backend is baked into
+  `memory/store.py` at scaffold time rather than read from the environment, so
+  a SQLite project deployed beside a Postgres container writes memories to a
+  file *inside* the container — on the image layer, not the volume — and every
+  rebuild silently discards them.
+
+  `deploy` regenerates `store.py` for Postgres, records it in `agent.yaml`, and
+  adds the driver to `pyproject.toml`. It runs before anything is generated,
+  since `langgraph.json` and `store.py` both derive from the backend. Files you
+  have edited are never overwritten — the switch uses the same plan-and-compare
+  path `langctl add` does. `--keep-sqlite` opts out, and says plainly that a
+  rebuild will discard the data.
+
+- `POSTGRES_USER` in `.env.deploy`, so the database role is no longer
+  hard-coded. Compose reads it as `${POSTGRES_USER:-postgres}` in both the
+  connection string and the healthcheck.
+
 ### Changed
 
 - **`langctl deploy` no longer needs a licence, and LangSmith is now entirely
@@ -49,26 +67,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `--licensed` later is a flag rather than a migration. Redis has no consumer
   in the unlicensed stack; it is provisioned for that transition, and the
   compose file says so rather than implying it is doing work.
-
-### Added
-
-- **A SQLite project is moved onto the stack's Postgres before it deploys.**
-  This is a data-loss fix, not tidiness: the memory backend is baked into
-  `memory/store.py` at scaffold time rather than read from the environment, so
-  a SQLite project deployed beside a Postgres container writes memories to a
-  file *inside* the container — on the image layer, not the volume — and every
-  rebuild silently discards them.
-
-  `deploy` regenerates `store.py` for Postgres, records it in `agent.yaml`, and
-  adds the driver to `pyproject.toml`. It runs before anything is generated,
-  since `langgraph.json` and `store.py` both derive from the backend. Files you
-  have edited are never overwritten — the switch uses the same plan-and-compare
-  path `langctl add` does. `--keep-sqlite` opts out, and says plainly that a
-  rebuild will discard the data.
-
-- `POSTGRES_USER` in `.env.deploy`, so the database role is no longer
-  hard-coded. Compose reads it as `${POSTGRES_USER:-postgres}` in both the
-  connection string and the healthcheck.
 
 ### Fixed
 
