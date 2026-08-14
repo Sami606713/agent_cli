@@ -6,10 +6,14 @@ import re
 import shutil
 import subprocess
 import sys
+from collections.abc import Callable
+from concurrent.futures import ThreadPoolExecutor
+from dataclasses import dataclass, field
 from pathlib import Path
 
 import typer
 from rich.console import Console
+from rich.markup import escape
 from rich.panel import Panel
 from rich.prompt import Confirm, Prompt
 
@@ -53,57 +57,122 @@ def _venv_has_langgraph(dest: Path) -> bool:
     return (dest / ".venv" / bin_dir / exe).is_file()
 
 
-def _install(dest: Path) -> list[str]:
-    """Install every dependency into the project itself.
+@dataclass
+class InstallReport:
+    """The outcome of one install, held until both are done.
 
-    Nothing goes on the machine globally: the agent's packages and the Agent
-    Server CLI both belong to this project's `.venv`, which `uv sync` creates —
-    fetching a compatible interpreter itself when the system Python is too new
-    for the project's `requires-python`.
-
-    Returns the commands the user still has to run. An empty list means the
-    project is ready, and only then does the next-steps panel say so.
+    Lines are collected rather than printed as they happen: the two jobs finish
+    in whichever order the network decides, and output that reorders itself
+    between runs is output nobody trusts.
     """
-    todo: list[str] = []
 
+    lines: list[str] = field(default_factory=list)
+    todo: list[str] = field(default_factory=list)
+
+    def ok(self, message: str) -> None:
+        self.lines.append(f"[green]✓[/green] {message}")
+
+    def warn(self, message: str, command: str, hint: str | None = None) -> None:
+        self.lines.append(f"[yellow]![/yellow] {message}")
+        if hint:
+            self.lines.append(f"[dim]  {hint}[/dim]")
+        self.todo.append(command)
+
+    def failed(self, message: str, stderr: str, command: str) -> None:
+        self.lines.append(f"[red]✗[/red] {message}")
+        self.lines.append(f"[dim]{escape(stderr.strip()[-600:])}[/dim]")
+        self.todo.append(command)
+
+
+def _install_python(dest: Path) -> InstallReport:
+    """`uv sync` into the project's own .venv.
+
+    Nothing lands on the machine globally. uv fetches a compatible interpreter
+    itself when the system Python is too new for `requires-python`.
+    """
+    report = InstallReport()
     uv = find_executable("uv")
     if uv is None:
-        console.print("[yellow]![/yellow] uv not found — no Python dependencies installed")
-        console.print("[dim]  install uv: https://docs.astral.sh/uv/getting-started/[/dim]")
-        todo.append("uv sync --extra dev")
+        report.warn(
+            "uv not found — no Python dependencies installed",
+            "uv sync --extra dev",
+            "install uv: https://docs.astral.sh/uv/getting-started/",
+        )
+        return report
+
+    result = run([uv, "sync", "--extra", "dev"], cwd=dest)
+    if result.returncode != 0:
+        report.failed(
+            "uv sync failed — the project cannot run yet",
+            result.stderr,
+            "uv sync --extra dev",
+        )
+    elif not _venv_has_langgraph(dest):
+        report.warn(
+            "the agent server CLI did not land in .venv",
+            "uv add --dev 'langgraph-cli[inmem]'",
+        )
     else:
-        console.print("[dim]installing python dependencies into .venv…[/dim]")
-        result = run([uv, "sync", "--extra", "dev"], cwd=dest)
-        if result.returncode != 0:
-            console.print("[red]✗[/red] uv sync failed — the project cannot run yet")
-            console.print(f"[dim]{result.stderr.strip()[-600:]}[/dim]")
-            todo.append("uv sync --extra dev")
-        elif not _venv_has_langgraph(dest):
-            console.print("[yellow]![/yellow] the agent server CLI did not land in .venv")
-            todo.append("uv add --dev 'langgraph-cli[inmem]'")
-        else:
-            console.print("[green]✓[/green] python dependencies installed in .venv")
+        report.ok("python dependencies installed in .venv")
+    return report
 
+
+def _install_frontend(web: Path) -> InstallReport:
+    report = InstallReport()
+    # The resolved path, not the bare name: on Windows npm and pnpm are .cmd
+    # shims, which CreateProcess cannot launch by name.
+    pm = package_manager()
+    if pm is None:
+        report.warn(
+            "no npm or pnpm found — the chat UI is not installed",
+            "cd web && npm install",
+            "install Node.js 20+: https://nodejs.org",
+        )
+        return report
+
+    label = Path(pm).stem
+    result = run([pm, "install"], cwd=web)
+    if result.returncode != 0:
+        report.failed(
+            f"{label} install failed — the chat UI will not start",
+            result.stderr,
+            f"cd web && {label} install",
+        )
+    else:
+        report.ok("chat UI installed")
+    return report
+
+
+def _install(dest: Path) -> list[str]:
+    """Install everything the project needs, both halves at once.
+
+    The two are independent — separate directories, separate tools, no shared
+    lockfile — and they are the slowest part of `new`. Run in sequence they
+    cost the sum; run together they cost the longer of the two, which is npm.
+
+    Returns the commands the user still has to run. Empty means the project is
+    ready, and only then does the next-steps panel say so.
+    """
     web = dest / "web"
+    jobs: dict[str, Callable[[], InstallReport]] = {"python": lambda: _install_python(dest)}
     if web.is_dir():
-        # The resolved path, not the bare name: on Windows npm and pnpm are
-        # .cmd shims, which CreateProcess cannot launch by name.
-        pm = package_manager()
-        if pm is None:
-            console.print("[yellow]![/yellow] no npm or pnpm found — the chat UI is not installed")
-            console.print("[dim]  install Node.js 20+: https://nodejs.org[/dim]")
-            todo.append("cd web && npm install")
-        else:
-            label = Path(pm).stem
-            console.print(f"[dim]installing the chat UI ({label})… this takes a minute[/dim]")
-            result = run([pm, "install"], cwd=web)
-            if result.returncode != 0:
-                console.print(f"[red]✗[/red] {label} install failed — the chat UI will not start")
-                console.print(f"[dim]{result.stderr.strip()[-600:]}[/dim]")
-                todo.append(f"cd web && {label} install")
-            else:
-                console.print("[green]✓[/green] chat UI installed")
+        jobs["frontend"] = lambda: _install_frontend(web)
 
+    what = " and ".join(jobs)
+    with console.status(f"[dim]installing {what} dependencies…[/dim]", spinner="dots"):
+        with ThreadPoolExecutor(max_workers=len(jobs)) as pool:
+            # Both are subprocess waits, so threads are the right tool: the GIL
+            # is released for the whole duration.
+            futures = {name: pool.submit(job) for name, job in jobs.items()}
+            reports = {name: future.result() for name, future in futures.items()}
+
+    # Fixed order, whatever order they finished in.
+    todo: list[str] = []
+    for name in jobs:
+        report = reports[name]
+        for line in report.lines:
+            console.print(line)
+        todo += report.todo
     return todo
 
 
