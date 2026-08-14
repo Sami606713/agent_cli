@@ -164,9 +164,11 @@ def deploy(
         # Name what this stack actually needs. The licence-free stack wants
         # only a model key; naming Postgres and LangSmith there sent people
         # hunting for credentials they do not need.
-        needed = [spec.model.api_key_env] if spec.model.api_key_env else []
+        needed = ["POSTGRES_PASSWORD"]
+        if spec.model.api_key_env:
+            needed.append(spec.model.api_key_env)
         if licensed:
-            needed += ["POSTGRES_PASSWORD", "a licence key"]
+            needed.append("a licence key")
         raise LangctlError(
             f"Created {ENV_FILE} — fill it in, then deploy again",
             fix=(
@@ -182,6 +184,19 @@ def deploy(
             f"Still unset in {ENV_FILE}: {', '.join(gaps)}",
             fix="Fill those in and deploy again. Nothing was built.",
         )
+    # Postgres is in the stack either way, but the graph only reaches for it
+    # when the project was scaffolded that way — the backend is baked into
+    # memory/store.py, not read from the environment.
+    if not licensed and spec.memory.long_term.enabled:
+        backend = spec.memory.long_term.backend
+        if backend != "postgres":
+            console.print(
+                f"\n[yellow]![/yellow] Postgres is running in the stack, but this project "
+                f"stores long-term memory in [bold]{backend}[/bold], so it will not use it.\n"
+                "[dim]  For durable memory that survives a container rebuild:\n"
+                "    langctl add memory --backend postgres[/dim]"
+            )
+
     if licensed and not env.get(LICENCE_KEY, "").strip():
         console.print(
             f"\n[yellow]![/yellow] [bold]{LICENCE_KEY} is not set.[/bold] The Agent Server "

@@ -53,16 +53,25 @@ class TestOneStack:
         for rel in STACK_FILES:
             assert (root / rel).is_file(), rel
 
-    def test_the_default_stack_is_agent_and_web_only(self, project):
-        """No licence, no databases: the in-memory server needs neither."""
+    @pytest.mark.parametrize("licensed", [False, True])
+    def test_both_stacks_carry_the_same_four_services(self, project, licensed):
+        spec, root = project
+        emit(spec, root, licensed=licensed)
+        assert set(compose_of(root)["services"]) == {"web", "agent", "postgres", "redis"}
+
+    def test_the_unlicensed_agent_is_given_the_database(self, project):
+        """No licence, but the graph's own store still gets real Postgres."""
         spec, root = project
         emit(spec, root)
-        assert set(compose_of(root)["services"]) == {"web", "agent"}
+        env = compose_of(root)["services"]["agent"]["environment"]
+        assert env["POSTGRES_URI"].startswith("postgres://postgres:")
+        assert "@postgres:5432/" in env["POSTGRES_URI"]
 
-    def test_the_licensed_stack_adds_its_databases(self, project):
+    def test_the_licensed_agent_gets_the_server_variables_instead(self, project):
         spec, root = project
         emit(spec, root, licensed=True)
-        assert set(compose_of(root)["services"]) == {"web", "agent", "postgres", "redis"}
+        env = compose_of(root)["services"]["agent"]["environment"]
+        assert "DATABASE_URI" in env and "REDIS_URI" in env
 
     def test_the_frontend_is_never_told_an_address(self, project):
         """The whole point: a service name, not a URL anyone has to maintain."""
@@ -158,7 +167,8 @@ class TestSecretsStaySecret:
 
     def test_langsmith_is_not_required_by_the_default_stack(self):
         """Tracing is opt-in, and the in-memory server has no licence check."""
-        assert missing_secrets({"OPENAI_API_KEY": "sk-real"}, "OPENAI_API_KEY") == []
+        env = {"OPENAI_API_KEY": "sk-real", "POSTGRES_PASSWORD": "pw"}
+        assert missing_secrets(env, "OPENAI_API_KEY") == []
 
     def test_the_licensed_stack_demands_a_licence_of_some_kind(self):
         env = {"POSTGRES_PASSWORD": "p", "OPENAI_API_KEY": "sk-real"}

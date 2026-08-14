@@ -30,10 +30,9 @@ ENV_FILE = ".env.deploy"
 #: Checked before anything is built. Discovering a missing key after a
 #: ten-minute image build is a bad way to find out.
 #:
-#: The default stack needs none of these — the in-memory agent server has no
-#: licence check, no database and no LangSmith requirement. Only the licensed
-#: stack, which runs LangChain's production Agent Server, does.
-LICENSED_SECRETS = ("POSTGRES_PASSWORD",)
+#: Both stacks run Postgres, so both need its password. What the default stack
+#: does *not* need is a licence key or any LangSmith credential.
+REQUIRED_SECRETS = ("POSTGRES_PASSWORD",)
 
 #: Values shipped in the example file that are not real secrets.
 PLACEHOLDERS = frozenset({"", "change-me"})
@@ -201,13 +200,13 @@ def missing_secrets(
 ) -> list[str]:
     """Required values that are absent, empty, or still the placeholder.
 
-    The model key is the only thing the default stack needs. LangSmith is not
-    required at all: tracing is opt-in, and the in-memory agent server has no
-    licence check to satisfy.
+    Both stacks need the model key and the database password. LangSmith is not
+    required by the default stack at all: tracing is opt-in, and the in-memory
+    agent server has no licence check to satisfy.
     """
-    required = [model_key_env] if model_key_env else []
-    if licensed:
-        required += LICENSED_SECRETS
+    required = [*REQUIRED_SECRETS]
+    if model_key_env:
+        required.append(model_key_env)
     missing = [key for key in required if env.get(key, "").strip() in PLACEHOLDERS]
 
     if licensed and all(env.get(k, "").strip() in PLACEHOLDERS for k in LICENCE_ALTERNATIVES):

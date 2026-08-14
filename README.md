@@ -369,10 +369,16 @@ the agent starts and answers `/ok` → only then does the UI start. A deploy tha
 exits non-zero instead of handing back a URL that does not load.
 
 **No licence needed, and LangSmith is optional.** The default stack runs the
-in-memory agent server, which has no licence check and needs neither Postgres nor
-Redis — verified starting with no LangSmith key at all, in 162 MB. State is kept on a
-volume, so it survives restarts. Tracing is opt-in: set `LANGSMITH_TRACING=true` and a
-key in `.env.deploy` only if you want traces.
+in-memory agent server, which has no licence check — verified starting with no
+LangSmith key at all, in 162 MB. Postgres and Redis are in the stack either way, so
+your graph gets a real database rather than a file, and switching to `--licensed`
+later needs no new infrastructure. Tracing is opt-in: set `LANGSMITH_TRACING=true`
+and a key in `.env.deploy` only if you want traces.
+
+Postgres is only *used* by a project whose long-term memory backend is `postgres` —
+the backend is baked into `memory/store.py` at scaffold time. `deploy` says so
+plainly when it is running but idle, and `langctl add memory --backend postgres`
+switches it.
 
 For queue autoscaling, multi-replica scaling and graceful run draining, add
 `--licensed` to run LangChain's production Agent Server instead. That one validates a

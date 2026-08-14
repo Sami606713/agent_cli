@@ -1,6 +1,6 @@
 # One stack. Both halves deploy together or not at all.
 #
-#   browser ──▶ {% if domain %}caddy ──▶ {% endif %}web ──▶ /api ──▶ agent{% if licensed %} ──▶ postgres · redis{% else %} ──▶ /data{% endif %}
+#   browser ──▶ {% if domain %}caddy ──▶ {% endif %}web ──▶ /api ──▶ agent ──▶ postgres · redis
 
 #
 # The frontend reaches the agent at http://agent:8000 — a name on the private
@@ -14,17 +14,16 @@
 {% if not licensed %}
 #
 # This is the licence-free stack: the agent runs the in-memory server, which
-# needs no LangSmith licence key and no Postgres or Redis. State is pickled to
-# the agentdata volume. Use `langctl deploy --licensed` for the full Agent
-# Server once you have a licence.
+# has no licence check. Postgres is here for your graph's own store and
+# checkpointer; Redis is provisioned so that switching to `--licensed` later
+# needs no new infrastructure, though only the licensed server consumes it.
 {% endif %}
 
 name: {{ name }}
 
 volumes:
-{% if licensed %}
   pgdata:
-{% else %}
+{% if not licensed %}
   agentdata:
 {% endif %}
 {% if domain %}
@@ -33,7 +32,6 @@ volumes:
 {% endif %}
 
 services:
-{% if licensed %}
   postgres:
     image: postgres:16-alpine
     environment:
@@ -62,7 +60,6 @@ services:
       retries: 10
     restart: unless-stopped
 
-{% endif %}
   agent:
     build:
       context: .
@@ -75,20 +72,23 @@ services:
       DATABASE_URI: postgres://postgres:${POSTGRES_PASSWORD}@postgres:5432/{{ pkg }}?sslmode=disable
       REDIS_URI: redis://redis:6379/0
 {% else %}
+    environment:
+      # The graph's own store and checkpointer read this. It is set whether or
+      # not the project uses Postgres today, so switching backends later needs
+      # no change here.
+      POSTGRES_URI: postgres://postgres:${POSTGRES_PASSWORD}@postgres:5432/{{ pkg }}?sslmode=disable
     volumes:
-      # Threads, checkpoints and long-term memory. Without this every restart
-      # begins with an empty agent.
+      # Server-side state the in-memory runtime pickles: threads and runs.
+      # Anything the graph writes through POSTGRES_URI lives in Postgres.
       - agentdata:/data
 {% endif %}
     expose:
       - "8000"
-{% if licensed %}
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
-{% endif %}
     healthcheck:
       # The image ships Python but not curl, so probe with Python.
       test:
