@@ -8,6 +8,7 @@ for conditions we anticipated.
 from __future__ import annotations
 
 from rich.console import Console
+from rich.markup import escape
 from rich.panel import Panel
 
 
@@ -29,13 +30,17 @@ class LangctlError(Exception):
         self.detail = detail
 
     def render(self, console: Console) -> None:
-        body = [f"[bold red]{self.message}[/bold red]"]
+        # Every interpolated value is escaped. These strings carry shell
+        # commands, paths and upstream stderr, and Rich reads [...] as a style
+        # tag — so an unescaped hint to install `langgraph-cli[inmem]` printed
+        # as `langgraph-cli`, telling the reader to install the wrong thing.
+        body = [f"[bold red]{escape(self.message)}[/bold red]"]
         if self.detail:
             body.append("")
-            body.append(f"[dim]{self.detail}[/dim]")
+            body.append(f"[dim]{escape(self.detail)}[/dim]")
         if self.fix:
             body.append("")
-            body.append(f"[bold]Fix:[/bold] {self.fix}")
+            body.append(f"[bold]Fix:[/bold] {escape(self.fix)}")
         console.print(Panel("\n".join(body), border_style="red", title="error", title_align="left"))
 
 

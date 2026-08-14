@@ -85,7 +85,36 @@ def _langgraph_cli(project_root: Path | None = None) -> Check:
             f"{version} is older than {'.'.join(map(str, MIN_LANGGRAPH_CLI))}",
             "uv tool upgrade langgraph-cli",
         )
-    return Check("langgraph-cli", OK, version)
+
+    # Present and recent is not the same as usable. `langgraph dev` needs the
+    # `inmem` extra, which supplies langgraph-api, and it imports the graph
+    # in-process — so a globally installed CLI cannot see the project's
+    # dependencies. Both failures used to show up only as a crash at `dev`
+    # time, with doctor reporting a clean bill of health.
+    interpreter = _project_python(project_root) if project_root else None
+    if interpreter is None:
+        return Check("langgraph-cli", OK, version)
+
+    inside_project = Path(executable).parent == interpreter.parent
+    if not inside_project:
+        return Check(
+            "langgraph-cli",
+            FAIL,
+            f"{version}, but installed globally rather than in this project",
+            "`langgraph dev` imports your agent in-process, so it must run in the "
+            "project's environment: `uv add --dev 'langgraph-cli[inmem]'`.",
+        )
+
+    probe = run([str(interpreter), "-c", "import langgraph_api"], timeout=20)
+    if probe.returncode != 0:
+        return Check(
+            "langgraph-cli",
+            FAIL,
+            f"{version}, but the 'inmem' extra is missing",
+            "`langgraph dev` needs langgraph-api. Install the extra, not the bare "
+            "package: `uv add --dev 'langgraph-cli[inmem]'`.",
+        )
+    return Check("langgraph-cli", OK, f"{version} (project)")
 
 
 def _docker() -> Check:
