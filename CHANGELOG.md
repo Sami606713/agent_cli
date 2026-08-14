@@ -7,6 +7,67 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.13.0] - 2026-08-15
+
+### Changed
+
+- **`langctl deploy` no longer needs a licence, and LangSmith is now entirely
+  optional.** A deployment failed at start-up with
+  `ValueError: License verification failed` — LangChain's production Agent
+  Server validates a licence key inside its own image, and that check cannot be
+  disabled from here.
+
+  The in-memory agent server has no such check. Verified rather than assumed:
+  with every LangSmith and licence variable unset it answers `GET /ok` with
+  `200`, and the containerised version builds, starts with no LangSmith key
+  present, logs zero licence errors, and holds 162 MB. That is now the default.
+
+  `.env.deploy` asks only for the database credentials and your model key.
+  `LANGSMITH_TRACING=false` ships by default with the keys commented out — set
+  them only if you want traces. `--licensed` keeps LangChain's production
+  server for anyone who has a licence and wants queue autoscaling, multiple
+  replicas and graceful run draining.
+
+- **Postgres and Redis are in both stacks.** The licence-free stack previously
+  dropped them and pickled state to a volume. Now the unlicensed agent receives
+  `POSTGRES_URI` — the variable the generated `memory/store.py` reads — so the
+  graph gets a real database with no licence involved, and moving to
+  `--licensed` later is a flag rather than a migration. Redis has no consumer
+  in the unlicensed stack; it is provisioned for that transition, and the
+  compose file says so rather than implying it is doing work.
+
+### Added
+
+- **A SQLite project is moved onto the stack's Postgres before it deploys.**
+  This is a data-loss fix, not tidiness: the memory backend is baked into
+  `memory/store.py` at scaffold time rather than read from the environment, so
+  a SQLite project deployed beside a Postgres container writes memories to a
+  file *inside* the container — on the image layer, not the volume — and every
+  rebuild silently discards them.
+
+  `deploy` regenerates `store.py` for Postgres, records it in `agent.yaml`, and
+  adds the driver to `pyproject.toml`. It runs before anything is generated,
+  since `langgraph.json` and `store.py` both derive from the backend. Files you
+  have edited are never overwritten — the switch uses the same plan-and-compare
+  path `langctl add` does. `--keep-sqlite` opts out, and says plainly that a
+  rebuild will discard the data.
+
+- `POSTGRES_USER` in `.env.deploy`, so the database role is no longer
+  hard-coded. Compose reads it as `${POSTGRES_USER:-postgres}` in both the
+  connection string and the healthcheck.
+
+### Fixed
+
+- The "fill it in" error named `POSTGRES_PASSWORD` and `LANGSMITH_API_KEY`
+  unconditionally, sending people hunting for credentials the default stack
+  never asks for. It now names what the chosen stack actually needs.
+
+### Internal
+
+- The regeneration logic shared by `add` and `deploy` moved from
+  `commands/add.py` into `core/generate/regenerate.py`, so there is one
+  implementation rather than two that drift apart.
+
 ## [0.12.1] - 2026-08-15
 
 ### Fixed
