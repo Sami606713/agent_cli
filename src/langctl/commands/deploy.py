@@ -42,8 +42,11 @@ from ..core.deploy.targets import (
     write_agent_dockerfile,
 )
 from ..core.errors import LangctlError
+from ..core.generate.pyproject import sync_dependencies
+from ..core.generate.regenerate import apply_spec_change
 from ..core.generate.scaffold import write_langgraph_config
 from ..core.project.manifest import Project
+from ..core.project.spec_edit import merge_section
 from ..core.runtime.executables import require
 from ..core.runtime.langgraph_cli import find_langgraph
 
@@ -66,6 +69,57 @@ def _quiet(argv: list[str]) -> bool:
         subprocess.run(argv, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode
         == 0
     )
+
+
+def _ensure_postgres_memory(project: Project, spec, *, keep_sqlite: bool):
+    """Move a SQLite project onto the Postgres the stack already runs.
+
+    The memory backend is baked into `memory/store.py` when the project is
+    scaffolded — it is not read from the environment — so a deployment with a
+    Postgres container and a SQLite project quietly writes to a file inside the
+    container. That file lives on the image layer, not the volume, so every
+    rebuild silently discards every memory. Switching here is the difference
+    between a deployment that remembers and one that only appears to.
+
+    `--keep-sqlite` opts out, for a project that genuinely wants a local file.
+    """
+    memory = spec.memory
+    if not memory.long_term.enabled or memory.long_term.backend == "postgres":
+        return spec
+
+    if keep_sqlite:
+        console.print(
+            f"\n[yellow]![/yellow] Long-term memory stays on "
+            f"[bold]{memory.long_term.backend}[/bold] (--keep-sqlite). It is written "
+            "inside the container, so a rebuild discards it."
+        )
+        return spec
+
+    console.print(
+        f"\n[bold]memory[/bold] [dim]{memory.long_term.backend} → postgres[/dim]"
+    )
+    updated = memory.model_dump()
+    updated["long_term"]["backend"] = "postgres"
+    # `path` is left as it is: it means nothing to a Postgres store, and the
+    # field is required, so blanking it would fail validation. Switching back
+    # to SQLite later finds its old location intact.
+    new_spec = spec.model_copy(update={"memory": type(memory)(**updated)})
+
+    result = apply_spec_change(project.root, spec, new_spec)
+    for path in result.written:
+        console.print(f"  [green]✓[/green] {path.relative_to(project.root)}")
+    for path in result.skipped:
+        console.print(f"  [dim]· {path.relative_to(project.root)} (yours, kept)[/dim]")
+
+    changed, _backup = merge_section(project.spec_path, "memory", updated)
+    if changed:
+        console.print("  [green]✓[/green] agent.yaml")
+    if sync_dependencies(new_spec, project.root / "pyproject.toml"):
+        console.print("  [green]✓[/green] pyproject.toml (psycopg)")
+    console.print(
+        "  [dim]the stack's Postgres is used; --keep-sqlite opts out[/dim]"
+    )
+    return new_spec
 
 
 def deploy(
@@ -97,6 +151,11 @@ def deploy(
         "--licensed",
         help="Use LangChain's production Agent Server. Needs a licence key, Postgres and Redis.",
     ),
+    keep_sqlite: bool = typer.Option(
+        False,
+        "--keep-sqlite",
+        help="Deploy with SQLite memory instead of switching to the stack's Postgres.",
+    ),
     force: bool = typer.Option(False, "--force", help="Overwrite stack files you have edited."),
 ) -> None:
     """Deploy the app — frontend, agent and databases — to one host."""
@@ -125,8 +184,13 @@ def deploy(
         console.print(f"[green]✓[/green] stack stopped on {where}")
         return
 
+    # Before anything is generated: langgraph.json and memory/store.py are both
+    # derived from the memory backend, so switching after writing them would
+    # leave the stack describing a project that no longer exists.
+    spec = _ensure_postgres_memory(project, spec, keep_sqlite=keep_sqlite)
+
     # ---- write the stack -------------------------------------------------
-    console.print("[bold]stack[/bold]")
+    console.print("\n[bold]stack[/bold]")
     result = emit(
         spec, root, web_host_port=port, domain=domain, licensed=licensed, overwrite=force
     )
@@ -184,19 +248,6 @@ def deploy(
             f"Still unset in {ENV_FILE}: {', '.join(gaps)}",
             fix="Fill those in and deploy again. Nothing was built.",
         )
-    # Postgres is in the stack either way, but the graph only reaches for it
-    # when the project was scaffolded that way — the backend is baked into
-    # memory/store.py, not read from the environment.
-    if not licensed and spec.memory.long_term.enabled:
-        backend = spec.memory.long_term.backend
-        if backend != "postgres":
-            console.print(
-                f"\n[yellow]![/yellow] Postgres is running in the stack, but this project "
-                f"stores long-term memory in [bold]{backend}[/bold], so it will not use it.\n"
-                "[dim]  For durable memory that survives a container rebuild:\n"
-                "    langctl add memory --backend postgres[/dim]"
-            )
-
     if licensed and not env.get(LICENCE_KEY, "").strip():
         console.print(
             f"\n[yellow]![/yellow] [bold]{LICENCE_KEY} is not set.[/bold] The Agent Server "

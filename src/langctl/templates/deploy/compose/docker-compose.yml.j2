@@ -35,13 +35,13 @@ services:
   postgres:
     image: postgres:16-alpine
     environment:
-      POSTGRES_USER: postgres
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env.deploy}
       POSTGRES_DB: {{ pkg }}
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d {{ pkg }}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d {{ pkg }}"]
       start_period: 10s
       interval: 5s
       timeout: 5s
@@ -69,14 +69,14 @@ services:
       - .env.deploy
 {% if licensed %}
     environment:
-      DATABASE_URI: postgres://postgres:${POSTGRES_PASSWORD}@postgres:5432/{{ pkg }}?sslmode=disable
+      DATABASE_URI: postgres://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD}@postgres:5432/{{ pkg }}?sslmode=disable
       REDIS_URI: redis://redis:6379/0
 {% else %}
     environment:
       # The graph's own store and checkpointer read this. It is set whether or
       # not the project uses Postgres today, so switching backends later needs
       # no change here.
-      POSTGRES_URI: postgres://postgres:${POSTGRES_PASSWORD}@postgres:5432/{{ pkg }}?sslmode=disable
+      POSTGRES_URI: postgres://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD}@postgres:5432/{{ pkg }}?sslmode=disable
     volumes:
       # Server-side state the in-memory runtime pickles: threads and runs.
       # Anything the graph writes through POSTGRES_URI lives in Postgres.

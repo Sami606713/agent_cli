@@ -64,7 +64,8 @@ class TestOneStack:
         spec, root = project
         emit(spec, root)
         env = compose_of(root)["services"]["agent"]["environment"]
-        assert env["POSTGRES_URI"].startswith("postgres://postgres:")
+        # The user may override the role; the default is baked into compose.
+        assert env["POSTGRES_URI"].startswith("postgres://${POSTGRES_USER:-postgres}:")
         assert "@postgres:5432/" in env["POSTGRES_URI"]
 
     def test_the_licensed_agent_gets_the_server_variables_instead(self, project):
@@ -286,3 +287,64 @@ class TestPorts:
         spec, root = project
         emit(spec, root, web_host_port=8080)
         assert compose_of(root)["services"]["web"]["environment"]["PORT"] == "3000"
+
+
+class TestSqliteIsMovedOntoTheStacksPostgres:
+    """A Postgres container plus a SQLite project is a silent data-loss trap.
+
+    The backend is baked into memory/store.py at scaffold time, so such a
+    deployment writes memories to a file inside the container — on the image
+    layer, not the volume — and every rebuild discards them. Deploy switches
+    the project instead.
+    """
+
+    def project_at(self, tmp_path, backend="sqlite"):
+        from langctl.core.project.manifest import Project
+
+        spec = AgentSpec(name="demo-agent")
+        if backend != "sqlite":
+            memory = spec.memory.model_dump()
+            memory["long_term"]["backend"] = backend
+            spec = spec.model_copy(update={"memory": type(spec.memory)(**memory)})
+        scaffold(spec, tmp_path)
+        return Project(root=tmp_path, spec=spec)
+
+    def test_a_sqlite_project_is_switched(self, tmp_path):
+        from langctl.commands.deploy import _ensure_postgres_memory
+
+        project = self.project_at(tmp_path)
+        assert project.spec.memory.long_term.backend == "sqlite"
+
+        updated = _ensure_postgres_memory(project, project.spec, keep_sqlite=False)
+
+        assert updated.memory.long_term.backend == "postgres"
+        store = (tmp_path / "src/demo_agent/memory/store.py").read_text(encoding="utf-8")
+        assert "PostgresStore" in store and "SqliteStore" not in store
+        assert "POSTGRES_URI" in store
+        # agent.yaml records it, so the next command agrees with the code.
+        assert "postgres" in (tmp_path / "agent.yaml").read_text(encoding="utf-8")
+        # The driver has to come with it.
+        assert "postgres" in (tmp_path / "pyproject.toml").read_text(encoding="utf-8")
+
+    def test_keep_sqlite_opts_out(self, tmp_path):
+        from langctl.commands.deploy import _ensure_postgres_memory
+
+        project = self.project_at(tmp_path)
+        updated = _ensure_postgres_memory(project, project.spec, keep_sqlite=True)
+
+        assert updated.memory.long_term.backend == "sqlite"
+        store = (tmp_path / "src/demo_agent/memory/store.py").read_text(encoding="utf-8")
+        assert "SqliteStore" in store
+
+    def test_a_postgres_project_is_left_alone(self, tmp_path):
+        from langctl.commands.deploy import _ensure_postgres_memory
+
+        project = self.project_at(tmp_path, backend="postgres")
+        before = (tmp_path / "src/demo_agent/memory/store.py").read_text(encoding="utf-8")
+
+        updated = _ensure_postgres_memory(project, project.spec, keep_sqlite=False)
+
+        assert updated is project.spec
+        assert (tmp_path / "src/demo_agent/memory/store.py").read_text(
+            encoding="utf-8"
+        ) == before

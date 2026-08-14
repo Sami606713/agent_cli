@@ -23,9 +23,9 @@ from ..core.generate.boilerplate import (
 )
 from ..core.generate.boilerplate import render as render_custom
 from ..core.generate.pyproject import sync_dependencies
-from ..core.generate.render import plan_layers, render_layers
+from ..core.generate.regenerate import apply_spec_change
+from ..core.generate.render import render_layers
 from ..core.generate.scaffold import (
-    backend_template,
     frontend_templates,
     render_context,
     write_langgraph_config,
@@ -86,37 +86,9 @@ def _warn_shadowed_modules(project: Project) -> None:
 
 
 def _apply(project: Project, old: AgentSpec, spec: AgentSpec) -> None:
-    """Write derived files for a changed spec.
-
-    A plain overwrite=False render is wrong here: a file the template already
-    produced for the *old* spec exists, so it would be skipped, leaving the
-    project pointing at stale code. That is worse than an error — it silently
-    yields a project whose langgraph.json promises persistence while store.py
-    still returns an in-memory store.
-
-    So the comparison is against what the template *would have written before*.
-    Identical means untouched and safe to regenerate; different means the user
-    edited it and it is left alone.
-    """
-    layers = [backend_template(spec)]
-    before = plan_layers(layers, project.root, render_context(old))
-    after = plan_layers(layers, project.root, render_context(spec))
-
-    written: list = []
-    skipped: list = []
-    for path, content in sorted(after.items()):
-        if path.exists():
-            current = path.read_text(encoding="utf-8")
-            if current == content:
-                continue  # already correct
-            if current != before.get(path):
-                skipped.append(path)  # user-modified
-                continue
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(content, encoding="utf-8")
-        written.append(path)
-
-    _report(written, skipped)
+    """Write derived files for a changed spec."""
+    result = apply_spec_change(project.root, old, spec)
+    _report(result.written, result.skipped)
 
     write_langgraph_config(spec, project.langgraph_config_path)
     console.print("  [green]✓[/green] langgraph.json")
