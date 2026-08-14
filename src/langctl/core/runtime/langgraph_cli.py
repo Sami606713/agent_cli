@@ -26,12 +26,16 @@ def _bin_dir(venv: Path) -> Path:
 
 
 def find_langgraph(project_root: Path) -> str:
-    """Resolve the langgraph executable to use for *project_root*.
+    """Resolve the langgraph executable for *project_root*.
 
-    The project's own virtualenv wins over PATH. This matters for correctness,
-    not just tidiness: `langgraph dev` imports and runs the graph in-process, so
-    it must execute in the environment where the agent's dependencies are
-    installed. A globally installed CLI would fail to import the project.
+    Only the project's own virtualenv is accepted. `langgraph dev` imports and
+    runs the graph in-process, so it has to execute where the agent's
+    dependencies live — a globally installed CLI has its own isolated
+    environment and cannot import the project at all.
+
+    Falling back to PATH used to look helpful and was the opposite: a global
+    install satisfied every check, then failed at import time with an error
+    that pointed at the agent rather than at the install.
     """
     exe = "langgraph.exe" if sys.platform == "win32" else "langgraph"
     for venv_name in (".venv", "venv"):
@@ -39,10 +43,13 @@ def find_langgraph(project_root: Path) -> str:
         if candidate.is_file():
             return str(candidate)
 
-    found = shutil.which("langgraph")
-    if found:
-        return found
-
+    if shutil.which("langgraph"):
+        raise MissingDependency(
+            "langgraph (in this project)",
+            "You have langgraph installed globally, but it cannot import your "
+            "agent. Install it in the project instead:\n"
+            "  uv add --dev 'langgraph-cli[inmem]'",
+        )
     raise MissingDependency("langgraph", INSTALL_HINT)
 
 

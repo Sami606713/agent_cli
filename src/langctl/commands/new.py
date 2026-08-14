@@ -5,6 +5,7 @@ from __future__ import annotations
 import re
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 
 import typer
@@ -40,17 +41,48 @@ def slugify(text: str) -> str:
     return re.sub(r"-{2,}", "-", slug)
 
 
-def _install(dest: Path) -> None:
-    """Install dependencies, but never fail the scaffold over it."""
+def _venv_has_langgraph(dest: Path) -> bool:
+    """Did the Agent Server CLI actually land in the project's environment?
+
+    Checked rather than assumed. `langgraph dev` imports the agent in-process,
+    so this binary has to exist *here* — and a project missing it looks
+    perfectly fine until the first `langctl dev`, which is far too late.
+    """
+    exe = "langgraph.exe" if sys.platform == "win32" else "langgraph"
+    bin_dir = "Scripts" if sys.platform == "win32" else "bin"
+    return (dest / ".venv" / bin_dir / exe).is_file()
+
+
+def _install(dest: Path) -> list[str]:
+    """Install every dependency into the project itself.
+
+    Nothing goes on the machine globally: the agent's packages and the Agent
+    Server CLI both belong to this project's `.venv`, which `uv sync` creates —
+    fetching a compatible interpreter itself when the system Python is too new
+    for the project's `requires-python`.
+
+    Returns the commands the user still has to run. An empty list means the
+    project is ready, and only then does the next-steps panel say so.
+    """
+    todo: list[str] = []
+
     uv = find_executable("uv")
-    if uv:
-        console.print("[dim]installing python dependencies (uv)…[/dim]")
+    if uv is None:
+        console.print("[yellow]![/yellow] uv not found — no Python dependencies installed")
+        console.print("[dim]  install uv: https://docs.astral.sh/uv/getting-started/[/dim]")
+        todo.append("uv sync --extra dev")
+    else:
+        console.print("[dim]installing python dependencies into .venv…[/dim]")
         result = run([uv, "sync", "--extra", "dev"], cwd=dest)
         if result.returncode != 0:
-            console.print("[yellow]![/yellow] uv sync failed; run it yourself later")
-            console.print(f"[dim]{result.stderr.strip()[:400]}[/dim]")
-    else:
-        console.print("[yellow]![/yellow] uv not found — skipping python install")
+            console.print("[red]✗[/red] uv sync failed — the project cannot run yet")
+            console.print(f"[dim]{result.stderr.strip()[-600:]}[/dim]")
+            todo.append("uv sync --extra dev")
+        elif not _venv_has_langgraph(dest):
+            console.print("[yellow]![/yellow] the agent server CLI did not land in .venv")
+            todo.append("uv add --dev 'langgraph-cli[inmem]'")
+        else:
+            console.print("[green]✓[/green] python dependencies installed in .venv")
 
     web = dest / "web"
     if web.is_dir():
@@ -58,16 +90,21 @@ def _install(dest: Path) -> None:
         # .cmd shims, which CreateProcess cannot launch by name.
         pm = package_manager()
         if pm is None:
-            console.print("[yellow]![/yellow] no npm/pnpm found — skipping frontend install")
-            return
-        label = Path(pm).stem
-        console.print(
-            f"[dim]installing frontend dependencies ({label})… this takes a minute[/dim]"
-        )
-        result = run([pm, "install"], cwd=web)
-        if result.returncode != 0:
-            console.print(f"[yellow]![/yellow] {label} install failed; run it yourself in web/")
-            console.print(f"[dim]{result.stderr.strip()[:400]}[/dim]")
+            console.print("[yellow]![/yellow] no npm or pnpm found — the chat UI is not installed")
+            console.print("[dim]  install Node.js 20+: https://nodejs.org[/dim]")
+            todo.append("cd web && npm install")
+        else:
+            label = Path(pm).stem
+            console.print(f"[dim]installing the chat UI ({label})… this takes a minute[/dim]")
+            result = run([pm, "install"], cwd=web)
+            if result.returncode != 0:
+                console.print(f"[red]✗[/red] {label} install failed — the chat UI will not start")
+                console.print(f"[dim]{result.stderr.strip()[-600:]}[/dim]")
+                todo.append(f"cd web && {label} install")
+            else:
+                console.print("[green]✓[/green] chat UI installed")
+
+    return todo
 
 
 def new(
@@ -246,21 +283,24 @@ def new(
     if git and git_exe and not (dest / ".git").exists():
         subprocess.run([git_exe, "init", "-q"], cwd=dest, check=False)
 
-    if install:
-        _install(dest)
+    # Commands the user must run because an install did not complete. With
+    # --no-install that is everything, by request.
+    pending = _install(dest) if install else ["uv sync --extra dev"]
 
     rel = dest.name if dest.parent == Path.cwd() else str(dest)
-    # Local runtimes and ambient-credential providers have no key to add, so the
-    # step would read "add your None to .env".
     steps = [f"cd {rel}"]
+    # An unfinished install comes first: the later steps cannot work without it.
+    steps += [f"[yellow]{command}[/yellow]" for command in pending]
+    # Local runtimes and ambient-credential providers have no key to add, so the
+    # step would otherwise read "add your None to .env".
     if spec.model.api_key_env:
         steps.append(f"add your {spec.model.api_key_env} to [cyan].env[/cyan]")
     steps.append("langctl dev")
     console.print(
         Panel(
             "\n".join(f"[bold]{i}.[/bold] {s}" for i, s in enumerate(steps, 1)),
-            title="[bold]next steps[/bold]",
-            border_style="cyan",
+            title="[bold]next steps[/bold]" if not pending else "[bold]almost there[/bold]",
+            border_style="cyan" if not pending else "yellow",
             title_align="left",
         )
     )
