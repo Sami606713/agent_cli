@@ -19,6 +19,7 @@ from ..core.generate.scaffold import scaffold
 from ..core.project.spec import AgentSpec
 from ..core.runtime.executables import find as find_executable
 from ..core.runtime.executables import package_manager
+from ..core.runtime.process import run
 from ..core.wizard.memory import (
     EMBEDDING_MODES,
     MEMORY_BACKENDS,
@@ -44,9 +45,7 @@ def _install(dest: Path) -> None:
     uv = find_executable("uv")
     if uv:
         console.print("[dim]installing python dependencies (uv)…[/dim]")
-        result = subprocess.run(
-            [uv, "sync", "--extra", "dev"], cwd=dest, capture_output=True, text=True
-        )
+        result = run([uv, "sync", "--extra", "dev"], cwd=dest)
         if result.returncode != 0:
             console.print("[yellow]![/yellow] uv sync failed; run it yourself later")
             console.print(f"[dim]{result.stderr.strip()[:400]}[/dim]")
@@ -65,7 +64,7 @@ def _install(dest: Path) -> None:
         console.print(
             f"[dim]installing frontend dependencies ({label})… this takes a minute[/dim]"
         )
-        result = subprocess.run([pm, "install"], cwd=web, capture_output=True, text=True)
+        result = run([pm, "install"], cwd=web)
         if result.returncode != 0:
             console.print(f"[yellow]![/yellow] {label} install failed; run it yourself in web/")
             console.print(f"[dim]{result.stderr.strip()[:400]}[/dim]")

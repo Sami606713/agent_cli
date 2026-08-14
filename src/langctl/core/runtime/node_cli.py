@@ -14,6 +14,8 @@ import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
+from .process import TEXT_IO
+
 #: Registry CLIs prompt when they detect a TTY. Scaffolding must stay
 #: non-interactive or `langctl new` hangs forever in CI.
 NON_INTERACTIVE_ENV = {"CI": "1", "NPM_CONFIG_YES": "true", "ADBLOCK": "1"}
@@ -65,8 +67,8 @@ def run_npx(
             [npx, *args],
             cwd=str(cwd),
             capture_output=True,
-            text=True,
             timeout=timeout,
+            **TEXT_IO,
             env={**NON_INTERACTIVE_ENV, **_inherited_env()},
             stdin=subprocess.DEVNULL,  # a prompt gets EOF instead of hanging
         )

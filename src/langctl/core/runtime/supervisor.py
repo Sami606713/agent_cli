@@ -31,6 +31,7 @@ from pathlib import Path
 from rich.console import Console
 
 from .health import WaitResult, wait_for_http
+from .process import TEXT_IO
 
 IS_WINDOWS = sys.platform == "win32"
 
@@ -99,8 +100,11 @@ class ManagedProcess:
                 env=env,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
-                text=True,
                 bufsize=1,
+                # UTF-8 explicitly: the locale codec on Windows either garbles
+                # or refuses npm/Next.js output, and the decode error is a
+                # ValueError the pump below would swallow silently.
+                **TEXT_IO,
                 **kwargs,
             )
         except FileNotFoundError as exc:

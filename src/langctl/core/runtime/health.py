@@ -14,6 +14,8 @@ from dataclasses import dataclass
 
 import httpx
 
+from .process import TEXT_IO
+
 #: Agent Server readiness endpoint (verified: `langgraph dev` serves GET /ok).
 HEALTH_PATH = "/ok"
 
@@ -53,8 +55,8 @@ def describe_port_holder(port: int) -> str | None:
         out = subprocess.run(
             ["ss", "-ltnp", f"sport = :{port}"],
             capture_output=True,
-            text=True,
             timeout=2,
+            **TEXT_IO,
         ).stdout.strip()
         lines = [ln for ln in out.splitlines()[1:] if ln.strip()]
         return lines[0].strip() if lines else None

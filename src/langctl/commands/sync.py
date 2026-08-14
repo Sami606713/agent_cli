@@ -33,7 +33,10 @@ def sync(
         except json.JSONDecodeError:
             console.print("[yellow]![/yellow] langgraph.json is not valid JSON — regenerating")
 
-    missing, extra = dependency_drift(project.spec, (project.root / "pyproject.toml").read_text())
+    # encoding is explicit: the generated pyproject.toml contains an em dash,
+    # which the locale codec on Windows cannot always decode.
+    pyproject = (project.root / "pyproject.toml").read_text(encoding="utf-8")
+    missing, extra = dependency_drift(project.spec, pyproject)
     if missing or extra:
         console.print("[yellow]![/yellow] pyproject.toml dependencies are out of date:")
         for package in missing:

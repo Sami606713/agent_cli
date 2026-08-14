@@ -15,6 +15,10 @@ dev = [
     "langgraph-cli[inmem]>=0.4",
     "pytest>=8.0",
     "pytest-asyncio>=0.24",
+    # Supplies the `env` key under [tool.pytest.ini_options] below. Without it
+    # pytest ignores that key with a warning, and any test that imports
+    # config.py fails on a machine with no provider credentials.
+    "pytest-env>=1.1",
     "ruff>=0.6",
 ]
 

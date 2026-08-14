@@ -17,6 +17,7 @@ from ..core.project.manifest import find_project_root
 from ..core.project.spec import AgentSpec
 from ..core.runtime.health import describe_port_holder, is_port_free
 from ..core.runtime.langgraph_cli import find_langgraph
+from ..core.runtime.process import run
 
 console = Console()
 
@@ -36,7 +37,7 @@ class Check:
 
 def _version_of(command: list[str]) -> str | None:
     try:
-        result = subprocess.run(command, capture_output=True, text=True, timeout=15)
+        result = run(command, timeout=15)
     except (OSError, subprocess.SubprocessError):
         return None
     if result.returncode != 0:
@@ -92,7 +93,7 @@ def _docker() -> Check:
     if docker is None:
         return Check("docker", WARN, "not found", "Only needed for --docker and image builds.")
     try:
-        result = subprocess.run([docker, "info"], capture_output=True, text=True, timeout=20)
+        result = run([docker, "info"], timeout=20)
     except subprocess.SubprocessError:
         return Check("docker", WARN, "not responding")
     if result.returncode != 0:
@@ -121,7 +122,7 @@ def _config_check(root: Path) -> Check:
     except MissingDependency:
         return Check("langgraph.json", WARN, "present (cannot validate: no langgraph CLI)")
 
-    result = subprocess.run([langgraph, "validate"], cwd=root, capture_output=True, text=True)
+    result = run([langgraph, "validate"], cwd=root)
     if result.returncode == 0:
         return Check("langgraph.json", OK, "valid")
     return Check(
@@ -182,9 +183,7 @@ def _memory_check(spec: AgentSpec, root: Path) -> Check | None:
         "    sys.stderr.write(type(exc).__name__)\n"
         "    sys.exit(3)\n"
     )
-    result = subprocess.run(
-        [str(interpreter), "-c", probe], capture_output=True, text=True, timeout=20
-    )
+    result = run([str(interpreter), "-c", probe], timeout=20)
     if result.returncode == 0:
         return Check("memory (postgres)", OK, "reachable")
     if result.returncode == 2:
