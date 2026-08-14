@@ -1,6 +1,15 @@
+<div align="center">
+
 # langctl
 
-Scaffold, run, and deploy production LangChain agents — **frontend and agent in one command**.
+**Scaffold, run, and deploy production LangChain agents — frontend and agent in one command.**
+
+[![PyPI](https://img.shields.io/pypi/v/langctl.svg)](https://pypi.org/project/langctl/)
+[![Python](https://img.shields.io/pypi/pyversions/langctl.svg)](https://pypi.org/project/langctl/)
+[![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
+[![CI](https://github.com/Sami606713/agent_cli/actions/workflows/ci.yml/badge.svg)](https://github.com/Sami606713/agent_cli/actions)
+
+</div>
 
 ```bash
 uv tool install langctl
@@ -15,6 +24,35 @@ own origin, and tears both down cleanly on Ctrl-C. Like `next dev`, but the back
 an agent.
 
 Long-term memory is on by default and needs nothing running.
+
+## Requirements
+
+| | Version | Needed for | If missing |
+|---|---|---|---|
+| **Python** | 3.11 – 3.13 | langctl itself, and the agent | Nothing works. 3.14 is not supported: the Agent Server targets 3.11–3.13. |
+| **uv** | any recent | Installing the project's Python dependencies | `langctl new` skips the install and warns; run `uv sync --extra dev` yourself later. |
+| **Node.js** | 20 or newer | The chat UI | The frontend is not installed; `--no-frontend` projects do not need it. |
+| **npm** or **pnpm** | ships with Node | The chat UI | Same as above. |
+| **Docker** | with the compose plugin | `langctl deploy`, and `langctl dev --docker` | `dev` and `share` still work; `deploy` stops with a clear error. |
+| **Git** | any | `langctl new` initialises a repo | Scaffolding still succeeds; pass `--no-git` to skip it. |
+
+Two more are installed **into your project** by `langctl new`, not onto your machine:
+`langgraph-cli`, which runs the Agent Server, and your model provider's LangChain
+package. If you scaffold with `--no-install`, run `uv sync --extra dev` before
+`langctl dev`.
+
+For **deploying to a remote host** you also need `ssh` and `rsync` locally, and Docker
+with the compose plugin on the target machine. Nothing else — no registry, no
+Kubernetes, no cloud account.
+
+Everything is checked for you:
+
+```bash
+langctl doctor        # versions, ports, API keys, Postgres, langgraph validate
+```
+
+**Platforms.** Linux, macOS and Windows are all supported. On Windows, use PowerShell or
+Windows Terminal rather than the legacy console.
 
 ## Install
 
@@ -33,8 +71,9 @@ it is uv's cached index: `uv tool install --force --reinstall langctl`.
 |---|---|
 | [`langctl new`](#langctl-new) | Scaffold a project |
 | [`langctl dev`](#langctl-dev) | Run agent + frontend as one app |
+| [`langctl deploy`](#langctl-deploy) | Ship both halves to one host |
 | [`langctl add`](#langctl-add) | Add a feature to an existing project |
-| [`langctl share`](#deploying) | Expose your local app on a public URL |
+| [`langctl share`](#sharing-and-deploying) | Expose your local app on a public URL |
 | [`langctl sync`](#langctl-sync) | Regenerate derived files from `agent.yaml` |
 | [`langctl doctor`](#langctl-doctor) | Check the environment before it bites |
 
@@ -54,13 +93,13 @@ langctl new my-agent --yes --memory-backend postgres --semantic-search
 ### `langctl dev`
 
 `--backend-only` · `--frontend-only` · `--port` · `--backend-port` · `--no-open` ·
-`--docker` (runs `langgraph up`, port 8123) · `--tunnel` · `--strict-port`
+`--docker` (runs `langgraph up`, port 8123) · `--tunnel` · `--auto-port/--strict-port`
 
 ### `langctl add`
 
 ```bash
 langctl add memory --backend postgres
-langctl add frontend --ui minimal
+langctl add frontend
 langctl add tool "lookup order"
 ```
 
@@ -80,14 +119,14 @@ for each failure.
 
 ## Why the proxy
 
-The browser only ever talks to `/api/agent/...` on the frontend's origin:
+The browser only ever talks to `/api/...` on the frontend's origin:
 
 ```
 localhost:3000                      127.0.0.1:2024
 ┌────────────────────────┐          ┌──────────────────┐
 │ Next.js                │          │ langgraph dev    │
 │  /            chat UI  │          │  /threads /runs  │
-│  /api/agent/* ─proxy───┼─────────▶│  /assistants /ok │
+│  /api/*       ─proxy───┼─────────▶│  /assistants /ok │
 └────────────────────────┘          └──────────────────┘
         same origin ⇒ no CORS, ever
 ```
@@ -97,8 +136,8 @@ Three things fall out of this:
 - **CORS never applies.** There is no cross-origin request to preflight.
 - **The API key stays on the server.** The proxy runs in a route handler and attaches
   `x-api-key` there. Nothing secret reaches the browser.
-- **Dev, tunnel, and production differ by one variable.** `AGENT_PROXY_TARGET` points at
-  localhost, then a container, then a deployed server. The frontend source never changes.
+- **Dev, tunnel, and production differ by one variable.** `LANGGRAPH_API_URL` points at
+  localhost, then a container on the deploy network. The frontend source never changes.
 
 ## Chat UI
 
@@ -268,30 +307,72 @@ webhook testing, and trying the app on a phone.
 > The URL is public and unauthenticated. Anyone with it can talk to your agent
 > and spend your API credits.
 
-### `langctl deploy` — not built yet
+### `langctl deploy`
+<a id="langctl-deploy"></a>
 
-The plan is both halves on **one** platform, with the frontend as the only public
-surface and the agent internal behind the proxy:
+Both halves go to **one host, in one operation**, behind one URL:
+
+```bash
+langctl deploy                                    # this machine
+langctl deploy --host user@1.2.3.4                # a server you own
+langctl deploy --host user@1.2.3.4 --domain x.io  # the same, with HTTPS
+```
 
 ```
 ┌─ one host ────────────────────────────────────┐
-│  web      Next.js        ← public             │
-│   └ proxy → agent                             │
-│  agent    Agent Server     internal only      │
-│  postgres · redis          internal           │
+│  web       Next.js          ← the only door   │
+│   └ /api → agent                              │
+│  agent     Agent Server       internal only   │
+│  postgres · redis             internal        │
 └───────────────────────────────────────────────┘
 ```
 
-Until then, deploying means `langgraph deploy` for the agent and setting
-`AGENT_PROXY_TARGET` + `LANGSMITH_API_KEY` on your frontend host.
+**The frontend is never told an address.** It reaches the agent at `http://agent:8000`
+— a service name on the private network. There is nothing to paste into a config and
+nothing to update later, so redeploying the agent cannot break the UI. This is the
+failure the command exists to prevent; deploying the two halves separately means
+re-wiring them every time.
 
-Two constraints that shape the design, worth knowing now:
+Only the frontend publishes a port. The Agent Server has no route in from outside, so
+the LangSmith key stays in the server-side proxy exactly as it does in development.
 
-- **The Agent Server is licensed.** Self-hosting it in production needs a LangSmith
-  Enterprise licence key. The licence-free paths are `langctl share`, the JS embedded
-  mode (agent inside Next.js route handlers, no Agent Server), and LangSmith Cloud.
-- **A SQLite store on an ephemeral container filesystem loses every memory on restart**,
-  so `deploy` will have to switch long-term memory to Postgres or refuse.
+**First deploy**, in three steps:
+
+```bash
+langctl deploy --host user@1.2.3.4        # 1. stops, writes .env.deploy
+#                                            2. fill in the three secrets
+scp .env.deploy user@1.2.3.4:~/my-agent/  # 3. place them on the host, once
+langctl deploy --host user@1.2.3.4        #    run again — done
+```
+
+Secrets are checked **before** anything is built, so a missing key costs you a second
+rather than ten minutes into an image build. `.env.deploy` is never uploaded by a
+deploy and never baked into an image.
+
+| | |
+|---|---|
+| `--logs [--service agent]` | Follow logs from the stack |
+| `--down` | Stop it. The database survives |
+| `--down --volumes` | Stop and **delete all data** — prompts first |
+| `--build-only` | Build images without starting |
+| `--force` | Overwrite stack files you have edited |
+
+Redeploy with the same command: rsync sends only what changed and Docker reuses layers.
+
+With `--domain`, Caddy joins the stack and obtains and renews a Let's Encrypt
+certificate on its own. It deliberately does not compress `text/event-stream` —
+buffering the token stream to compress it is what makes an agent appear to hang and
+then answer everything at once.
+
+The startup order is enforced by health checks: Postgres and Redis become healthy →
+the agent starts and answers `/ok` → only then does the UI start. A deploy that fails
+exits non-zero instead of handing back a URL that does not load.
+
+> **The Agent Server is licensed.** Self-hosting it in production needs a
+> `LANGGRAPH_CLOUD_LICENSE_KEY` from a LangSmith Enterprise plan. It starts without one
+> using your LangSmith API key, and `deploy` warns rather than blocks — but that is
+> outside LangChain's terms for production use. The licence-free paths are
+> `langctl share` and LangSmith Cloud.
 
 ## Configuration
 
