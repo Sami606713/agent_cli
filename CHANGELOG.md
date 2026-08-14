@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.13.2] - 2026-08-15
+
+### Fixed
+
+- **A deployed agent using Postgres crash-looped on start-up** with
+  `ImportError: no pq wrapper available`. `langgraph-checkpoint-postgres`
+  depends on bare `psycopg`, which is the pure-Python package and needs a
+  system libpq to do anything. libpq is usually present on a developer machine
+  and never in a slim container, so the project imported cleanly locally and
+  died in Docker.
+
+  This surfaced because 0.13.0 switches SQLite projects to Postgres before
+  deploying: until then `store.py` never imported psycopg at all. The switch
+  was right and incomplete — it changed the code without shipping a driver that
+  works where the code runs.
+
+  A Postgres project now depends on `psycopg[binary]`, a self-contained wheel
+  carrying its own libpq, and the agent image installs `libpq5` as a fallback
+  for any platform with no wheel.
+
+  Existing projects pick this up with `langctl sync`.
+
 ## [0.13.1] - 2026-08-15
 
 ### Fixed
