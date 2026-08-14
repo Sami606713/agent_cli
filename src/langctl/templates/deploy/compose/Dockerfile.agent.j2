@@ -16,6 +16,13 @@ FROM python:3.11-slim AS base
 # uv resolves and installs far faster than pip, and honours requires-python.
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 
+# libpq, for psycopg. The binary wheel normally carries its own copy, so this
+# is the fallback for a platform that has no wheel — without either, the agent
+# starts and then dies on "no pq wrapper available" as it loads the store.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends libpq5 \
+    && rm -rf /var/lib/apt/lists/*
+
 WORKDIR /app
 ENV UV_COMPILE_BYTECODE=1 \
     UV_LINK_MODE=copy \

@@ -393,3 +393,38 @@ class TestBackendOnly:
         assert "web" in services
         # And the agent stays private behind it.
         assert compose_of(root)["services"]["agent"]["expose"] == ["8000"]
+
+
+class TestPostgresShipsADriver:
+    """`langgraph-checkpoint-postgres` depends on bare `psycopg`.
+
+    That is the pure-Python package, which needs a system libpq to function.
+    libpq is usually present on a developer machine and never in a slim
+    container, so a Postgres project imported cleanly locally and died at
+    start-up in Docker with "no pq wrapper available".
+    """
+
+    def spec_with(self, backend: str) -> AgentSpec:
+        spec = AgentSpec(name="demo-agent")
+        memory = spec.memory.model_dump()
+        memory["long_term"]["backend"] = backend
+        return spec.model_copy(update={"memory": type(spec.memory)(**memory)})
+
+    def test_a_postgres_project_gets_a_usable_driver(self):
+        from langctl.core.generate.deps import runtime_packages
+
+        packages = runtime_packages(self.spec_with("postgres"))
+        assert any(p.startswith("psycopg[binary]") for p in packages), packages
+
+    def test_a_sqlite_project_does_not_carry_it(self):
+        from langctl.core.generate.deps import runtime_packages
+
+        packages = runtime_packages(self.spec_with("sqlite"))
+        assert not any("psycopg" in p for p in packages)
+
+    def test_the_image_installs_libpq_as_a_fallback(self, project):
+        # For a platform with no binary wheel, the system library is the
+        # remaining way psycopg can work at all.
+        spec, root = project
+        emit(spec, root)
+        assert "libpq5" in (root / "Dockerfile.agent").read_text(encoding="utf-8")

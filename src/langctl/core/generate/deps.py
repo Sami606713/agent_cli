@@ -13,11 +13,17 @@ from __future__ import annotations
 from ..catalog.middleware import REGISTRY
 from ..project.spec import AgentSpec
 
-#: Memory backend → package supplying both its saver and its store.
-MEMORY_PACKAGES: dict[str, str | None] = {
-    "sqlite": "langgraph-checkpoint-sqlite>=3.0",
-    "postgres": "langgraph-checkpoint-postgres>=3.0",
-    "memory": None,  # ships with langgraph
+#: Memory backend → packages supplying its saver and its store.
+#:
+#: Postgres spells out psycopg's binary wheel. langgraph-checkpoint-postgres
+#: depends on bare `psycopg`, which is the pure-Python package and needs a
+#: system libpq to do anything at all. libpq is usually present on a developer
+#: machine and never in a slim container, so the agent imported cleanly locally
+#: and died at start-up in Docker with "no pq wrapper available".
+MEMORY_PACKAGES: dict[str, list[str]] = {
+    "sqlite": ["langgraph-checkpoint-sqlite>=3.0"],
+    "postgres": ["langgraph-checkpoint-postgres>=3.0", "psycopg[binary]>=3.2"],
+    "memory": [],  # ships with langgraph
 }
 
 #: Embeddings provider → package.
@@ -45,14 +51,10 @@ def runtime_packages(spec: AgentSpec) -> list[str]:
     if provider_package:
         packages.append(provider_package)
 
-    short_term = MEMORY_PACKAGES.get(spec.memory.short_term.backend)
-    if short_term:
-        packages.append(short_term)
+    packages += MEMORY_PACKAGES.get(spec.memory.short_term.backend, [])
 
     if spec.memory.long_term.enabled:
-        long_term = MEMORY_PACKAGES.get(spec.memory.long_term.backend)
-        if long_term:
-            packages.append(long_term)
+        packages += MEMORY_PACKAGES.get(spec.memory.long_term.backend, [])
 
         if spec.memory.long_term.semantic_search:
             embeddings = spec.memory.long_term.embeddings
