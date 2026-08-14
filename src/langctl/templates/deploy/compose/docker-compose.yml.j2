@@ -1,6 +1,16 @@
 # One stack. Both halves deploy together or not at all.
 #
+{% if frontend %}
 #   browser ──▶ {% if domain %}caddy ──▶ {% endif %}web ──▶ /api ──▶ agent ──▶ postgres · redis
+{% else %}
+#   client ──▶ {% if domain %}caddy ──▶ {% endif %}agent ──▶ postgres · redis
+#
+#   No chat UI in this deployment, so the agent publishes the port itself.
+#   There is no proxy in front of it and the Agent Server has no built-in
+#   authentication: anything that can reach the port can run your agent and
+#   spend your model credits. Put it behind a firewall, a VPN, or an
+#   authenticating proxy.
+{% endif %}
 
 #
 # The frontend reaches the agent at http://agent:8000 — a name on the private
@@ -82,8 +92,13 @@ services:
       # Anything the graph writes through POSTGRES_URI lives in Postgres.
       - agentdata:/data
 {% endif %}
+{% if frontend or domain %}
     expose:
       - "8000"
+{% else %}
+    ports:
+      - "{{ web_host_port }}:8000"
+{% endif %}
     depends_on:
       postgres:
         condition: service_healthy
@@ -100,6 +115,7 @@ services:
       retries: 12
     restart: unless-stopped
 
+{% if frontend %}
   web:
     build:
       context: ./web
@@ -129,6 +145,7 @@ services:
       agent:
         condition: service_healthy
     restart: unless-stopped
+{% endif %}
 {% if domain %}
 
   caddy:
@@ -143,6 +160,7 @@ services:
       - caddy_data:/data
       - caddy_config:/config
     depends_on:
-      - web
+      - {% if frontend %}web{% else %}agent{% endif %}
+
     restart: unless-stopped
 {% endif %}

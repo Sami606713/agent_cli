@@ -151,6 +151,11 @@ def deploy(
         "--licensed",
         help="Use LangChain's production Agent Server. Needs a licence key, Postgres and Redis.",
     ),
+    backend_only: bool = typer.Option(
+        False,
+        "--backend-only",
+        help="Deploy the agent alone, with no chat UI. The agent publishes the port.",
+    ),
     keep_sqlite: bool = typer.Option(
         False,
         "--keep-sqlite",
@@ -191,8 +196,17 @@ def deploy(
 
     # ---- write the stack -------------------------------------------------
     console.print("\n[bold]stack[/bold]")
+    # A project scaffolded with --no-frontend has no UI to deploy, so it is
+    # backend-only whether or not the flag was passed.
+    with_frontend = spec.frontend.enabled and not backend_only
     result = emit(
-        spec, root, web_host_port=port, domain=domain, licensed=licensed, overwrite=force
+        spec,
+        root,
+        web_host_port=port,
+        domain=domain,
+        licensed=licensed,
+        frontend=with_frontend,
+        overwrite=force,
     )
     for path in result.written:
         console.print(f"  [green]✓[/green] {path.relative_to(root)}")
@@ -212,7 +226,7 @@ def deploy(
         )
         console.print(f"  [green]✓[/green] {AGENT_DOCKERFILE}")
 
-    absent = missing_files(root, domain=domain)
+    absent = missing_files(root, domain=domain, frontend=with_frontend)
     if absent:
         raise LangctlError(
             f"Stack is incomplete: {', '.join(absent)}",
@@ -289,10 +303,16 @@ def deploy(
         url = f"https://{domain}" if domain else f"http://localhost:{port}"
 
     suffix = f" --host {remote.destination}" if remote else ""
+    reach = (
+        "[dim]the agent has no public route; the app reaches it privately[/dim]"
+        if with_frontend
+        else "[yellow]the agent API is public and unauthenticated — "
+        "put a firewall or VPN in front of it[/yellow]"
+    )
     console.print(
         Panel(
             f"[bold]{url}[/bold]\n"
-            f"[dim]the agent has no public route; the app reaches it privately[/dim]\n\n"
+            f"{reach}\n\n"
             f"[dim]logs[/dim]   langctl deploy --logs{suffix}\n"
             f"[dim]stop[/dim]   langctl deploy --down{suffix}",
             title="[bold]deployed[/bold]",

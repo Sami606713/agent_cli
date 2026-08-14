@@ -348,3 +348,48 @@ class TestSqliteIsMovedOntoTheStacksPostgres:
         assert (tmp_path / "src/demo_agent/memory/store.py").read_text(
             encoding="utf-8"
         ) == before
+
+
+class TestBackendOnly:
+    """A project with no chat UI must still deploy.
+
+    Before this, `deploy` wrote a web/Dockerfile beside no application and a
+    compose service pointing at it, so the build died on `COPY package.json`.
+    """
+
+    def headless(self, tmp_path) -> AgentSpec:
+        spec = AgentSpec(name="demo-agent", frontend={"enabled": False, "kind": "none"})
+        scaffold(spec, tmp_path)
+        return spec
+
+    def test_no_web_service_is_defined(self, tmp_path):
+        spec = self.headless(tmp_path)
+        emit(spec, tmp_path)
+        assert set(compose_of(tmp_path)["services"]) == {"agent", "postgres", "redis"}
+
+    def test_no_orphan_frontend_files(self, tmp_path):
+        spec = self.headless(tmp_path)
+        emit(spec, tmp_path)
+        assert not (tmp_path / "web" / "Dockerfile").exists()
+        assert missing_files(tmp_path, frontend=False) == []
+
+    def test_the_agent_publishes_the_port_itself(self, tmp_path):
+        # With no proxy in front, the agent is the only way in.
+        spec = self.headless(tmp_path)
+        emit(spec, tmp_path, web_host_port=8080)
+        agent = compose_of(tmp_path)["services"]["agent"]
+        assert agent["ports"] == ["8080:8000"]
+        assert "expose" not in agent
+
+    def test_a_frontend_project_can_still_opt_out(self, project):
+        spec, root = project
+        emit(spec, root, frontend=False)
+        assert "web" not in compose_of(root)["services"]
+
+    def test_the_default_still_carries_the_ui(self, project):
+        spec, root = project
+        emit(spec, root)
+        services = compose_of(root)["services"]
+        assert "web" in services
+        # And the agent stays private behind it.
+        assert compose_of(root)["services"]["agent"]["expose"] == ["8000"]

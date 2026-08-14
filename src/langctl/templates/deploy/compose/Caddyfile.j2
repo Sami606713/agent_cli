@@ -1,7 +1,7 @@
 # TLS is automatic: Caddy requests a Let's Encrypt certificate for this name on
 # first start and renews it thereafter. Nothing to configure, no cron job.
 {{ domain }} {
-	reverse_proxy web:3000 {
+	reverse_proxy {% if frontend %}web:3000{% else %}agent:8000{% endif %} {
 		# Agent runs stream for minutes. A default timeout would cut a long
 		# answer off part-way through.
 		transport http {

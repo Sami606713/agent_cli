@@ -29,18 +29,28 @@ STACK_FILES = (
     "docker-compose.yml",
     ".dockerignore",
     ".env.deploy.example",
-    "web/Dockerfile",
-    "web/.dockerignore",
 )
+
+#: Only meaningful when the deployment includes the chat UI.
+FRONTEND_FILES = ("web/Dockerfile", "web/.dockerignore")
 
 
 def deploy_context(
-    spec: AgentSpec, *, web_host_port: int, domain: str | None, licensed: bool = False
+    spec: AgentSpec,
+    *,
+    web_host_port: int,
+    domain: str | None,
+    licensed: bool = False,
+    frontend: bool | None = None,
 ) -> dict[str, Any]:
     """Scaffold context plus the values only deployment needs."""
     return {
         **render_context(spec),
         "web_host_port": web_host_port,
+        # Whether this deployment carries the chat UI. Defaults to what the
+        # project has; `--backend-only` overrides it. With no UI there is no
+        # proxy, so the agent publishes the port itself.
+        "frontend": spec.frontend.enabled if frontend is None else frontend,
         # When set, Caddy fronts the stack and terminates TLS; web stops
         # publishing a port of its own.
         "domain": domain,
@@ -58,6 +68,7 @@ def emit(
     web_host_port: int = 3000,
     domain: str | None = None,
     licensed: bool = False,
+    frontend: bool | None = None,
     overwrite: bool = False,
 ) -> RenderResult:
     """Write the stack into *root*.
@@ -66,31 +77,51 @@ def emit(
     silently replaced on the next deploy.
     """
     context = deploy_context(
-        spec, web_host_port=web_host_port, domain=domain, licensed=licensed
+        spec,
+        web_host_port=web_host_port,
+        domain=domain,
+        licensed=licensed,
+        frontend=frontend,
     )
     result = render_tree(LAYER, root, context, overwrite=overwrite)
+    if not context["frontend"]:
+        # A backend-only deployment has no web service, and a stray web/
+        # Dockerfile with no application beside it only invites a failed build.
+        result = _drop(result, [root / rel for rel in FRONTEND_FILES], unlink=True)
     if licensed:
         # `langgraph dockerfile` writes this one instead; ours would be
         # overwritten anyway, and shipping both would be confusing.
-        dockerfile = root / AGENT_DOCKERFILE
-        dockerfile.unlink(missing_ok=True)
-        result = RenderResult(
-            written=[p for p in result.written if p != dockerfile],
-            skipped=[p for p in result.skipped if p != dockerfile],
-        )
-    if domain:
-        return result
-    # Without a domain there is no Caddy service to read it, and a stray
-    # Caddyfile in the repo would imply TLS that is not actually configured.
-    caddyfile = root / "Caddyfile"
-    caddyfile.unlink(missing_ok=True)
+        result = _drop(result, [root / AGENT_DOCKERFILE], unlink=True)
+    if not domain:
+        # Without a domain there is no Caddy service to read it, and a stray
+        # Caddyfile would imply TLS that is not actually configured.
+        result = _drop(result, [root / "Caddyfile"], unlink=True)
+    return result
+
+
+def _drop(result: RenderResult, paths: list[Path], *, unlink: bool) -> RenderResult:
+    """Remove *paths* from disk and from the report of what was written."""
+    if unlink:
+        for path in paths:
+            path.unlink(missing_ok=True)
+            # Take the directory too if we emptied it — a bare `web/` with
+            # nothing in it looks like a half-finished scaffold.
+            parent = path.parent
+            if parent.is_dir() and not any(parent.iterdir()):
+                parent.rmdir()
     return RenderResult(
-        written=[p for p in result.written if p != caddyfile],
-        skipped=[p for p in result.skipped if p != caddyfile],
+        written=[p for p in result.written if p not in paths],
+        skipped=[p for p in result.skipped if p not in paths],
     )
 
 
-def missing_files(root: Path, *, domain: str | None = None) -> list[str]:
+def missing_files(
+    root: Path, *, domain: str | None = None, frontend: bool = True
+) -> list[str]:
     """Which stack files are absent from *root*."""
-    expected = [*STACK_FILES, *(["Caddyfile"] if domain else [])]
+    expected = [*STACK_FILES]
+    if frontend:
+        expected += FRONTEND_FILES
+    if domain:
+        expected.append("Caddyfile")
     return [rel for rel in expected if not (root / rel).exists()]

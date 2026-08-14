@@ -9,6 +9,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.13.0] - 2026-08-15
 
+### Added
+
+- **`langctl deploy --backend-only`, and a fix for projects that never had a
+  UI.** A project scaffolded with `--no-frontend` could not be deployed at all:
+  `deploy` wrote a `web/Dockerfile` beside no application and a compose service
+  pointing at it, so the build died on `COPY package.json`. The web service,
+  and those files, are now emitted only when the deployment actually carries
+  the UI.
+
+  With no UI there is no proxy, so the agent publishes the port itself — and
+  the Agent Server has no built-in authentication, so `deploy` says plainly
+  that the API is public and unauthenticated. Put a firewall, a VPN, or an
+  authenticating proxy in front of it.
+
 ### Changed
 
 - **`langctl deploy` no longer needs a licence, and LangSmith is now entirely
