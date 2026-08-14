@@ -1,0 +1,40 @@
+# Next.js in standalone mode: `next build` traces the modules actually imported
+# and copies them into .next/standalone, so the runtime stage never installs
+# anything. The image ends up a fraction of the size of one carrying a full
+# node_modules, and starts with `node server.js`.
+
+FROM node:20-alpine AS deps
+WORKDIR /app
+COPY package.json ./
+# No lockfile is vendored with agent-chat-ui, so this resolves the ranges in
+# package.json. Pin them by committing a lockfile and switching to `npm ci`.
+RUN npm install --no-audit --no-fund
+
+FROM node:20-alpine AS build
+WORKDIR /app
+# Build-time, because Next.js inlines NEXT_PUBLIC_* into the client bundle.
+ARG NEXT_PUBLIC_API_URL=/api
+ARG NEXT_PUBLIC_ASSISTANT_ID={{ graph_id }}
+ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
+ENV NEXT_PUBLIC_ASSISTANT_ID=$NEXT_PUBLIC_ASSISTANT_ID
+ENV NEXT_TELEMETRY_DISABLED=1
+COPY --from=deps /app/node_modules ./node_modules
+COPY . .
+RUN npm run build
+
+FROM node:20-alpine AS runtime
+WORKDIR /app
+ENV NODE_ENV=production
+ENV NEXT_TELEMETRY_DISABLED=1
+ENV PORT=3000
+# Bind all interfaces: the default binds loopback, which is unreachable from
+# another container on the compose network.
+ENV HOSTNAME=0.0.0.0
+
+RUN addgroup -g 1001 -S nodejs && adduser -S nextjs -u 1001
+COPY --from=build --chown=nextjs:nodejs /app/.next/standalone ./
+COPY --from=build --chown=nextjs:nodejs /app/.next/static ./.next/static
+USER nextjs
+
+EXPOSE 3000
+CMD ["node", "server.js"]

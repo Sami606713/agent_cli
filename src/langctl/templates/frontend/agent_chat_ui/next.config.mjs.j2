@@ -1,0 +1,14 @@
+/** @type {import('next').NextConfig} */
+const nextConfig = {
+  // Added by langctl; upstream agent-chat-ui does not set this. `next build`
+  // traces the server into .next/standalone so the deployment image can run
+  // `node server.js` without node_modules. It changes nothing for `next dev`.
+  output: "standalone",
+  experimental: {
+    serverActions: {
+      bodySizeLimit: "10mb",
+    },
+  },
+};
+
+export default nextConfig;

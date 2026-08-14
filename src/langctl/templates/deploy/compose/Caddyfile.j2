@@ -1,0 +1,27 @@
+# TLS is automatic: Caddy requests a Let's Encrypt certificate for this name on
+# first start and renews it thereafter. Nothing to configure, no cron job.
+{{ domain }} {
+	reverse_proxy web:3000 {
+		# Agent runs stream for minutes. A default timeout would cut a long
+		# answer off part-way through.
+		transport http {
+			read_timeout 600s
+			write_timeout 600s
+		}
+		flush_interval -1
+	}
+
+	# Compress everything except the token stream. Buffering an SSE response to
+	# compress it is exactly what makes an agent appear to hang and then answer
+	# all at once.
+	@compressible {
+		not header Content-Type text/event-stream*
+	}
+	encode @compressible zstd gzip
+
+	header {
+		Strict-Transport-Security "max-age=31536000;"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+	}
+}

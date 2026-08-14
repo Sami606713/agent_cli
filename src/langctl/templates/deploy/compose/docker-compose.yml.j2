@@ -1,0 +1,129 @@
+# One stack. Both halves deploy together or not at all.
+#
+#   browser ──▶ {% if domain %}caddy ──▶ {% endif %}web ──▶ /api ──▶ agent ──▶ postgres · redis
+#                        {% if domain %}TLS{% else %}   {% endif %}      public          private
+#
+# The frontend reaches the agent at http://agent:8000 — a name on the private
+# network that never changes. There is no deployment URL to copy anywhere, which
+# is the whole point: a redeployed agent cannot break the frontend, because the
+# frontend was never told an address.
+#
+# Only {% if domain %}caddy{% else %}web{% endif %} publishes a port. The Agent Server has no route in from outside,
+# so the LangSmith key stays in the frontend's server-side proxy, exactly as it
+# does under `langctl dev`.
+
+name: {{ name }}
+
+volumes:
+  pgdata:
+{% if domain %}
+  caddy_data:
+  caddy_config:
+{% endif %}
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env.deploy}
+      POSTGRES_DB: {{ pkg }}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d {{ pkg }}"]
+      start_period: 10s
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    # Redis is only the pub/sub broker for streaming. Durable state lives in
+    # Postgres, so persistence here would cost disk and buy nothing.
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  agent:
+    # Dockerfile.agent comes from `langgraph dockerfile`, which reads
+    # langgraph.json — the only thing that knows the base image, the Python
+    # version and the dependency set. Building here rather than pushing a
+    # prebuilt image means a remote host builds its own, with no registry.
+    build:
+      context: .
+      dockerfile: Dockerfile.agent
+    image: {{ name }}-agent:latest
+    env_file:
+      - .env.deploy
+    environment:
+      DATABASE_URI: postgres://postgres:${POSTGRES_PASSWORD}@postgres:5432/{{ pkg }}?sslmode=disable
+      REDIS_URI: redis://redis:6379/0
+    expose:
+      - "8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      # The base image ships Python but not curl, so probe with Python.
+      test:
+        - CMD-SHELL
+        - python -c "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/ok').status==200 else 1)"
+      start_period: 45s
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    restart: unless-stopped
+
+  web:
+    build:
+      context: ./web
+      args:
+        # Build args, not environment: Next.js inlines NEXT_PUBLIC_* into the
+        # client bundle during `next build`. Supplying them only at run time
+        # leaves the browser with undefined values and drops the user on
+        # agent-chat-ui's setup form.
+        NEXT_PUBLIC_API_URL: /api
+        NEXT_PUBLIC_ASSISTANT_ID: {{ graph_id }}
+    image: {{ name }}-web:latest
+    environment:
+      # Server-side only. The browser never learns this address; the API key
+      # rides along inside the passthrough route, never in the bundle.
+      LANGGRAPH_API_URL: http://agent:8000
+      LANGSMITH_API_KEY: ${LANGSMITH_API_KEY:?set LANGSMITH_API_KEY in .env.deploy}
+      PORT: "3000"
+{% if domain %}
+    expose:
+      - "3000"
+{% else %}
+    ports:
+      - "{{ web_host_port }}:3000"
+{% endif %}
+    depends_on:
+      agent:
+        condition: service_healthy
+    restart: unless-stopped
+{% if domain %}
+
+  caddy:
+    image: caddy:2-alpine
+    # Caddy obtains and renews a Let's Encrypt certificate for {{ domain }} on
+    # its own. Port 80 must stay open: it is how the ACME challenge is answered.
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - web
+    restart: unless-stopped
+{% endif %}

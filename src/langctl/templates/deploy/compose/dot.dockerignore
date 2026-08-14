@@ -1,0 +1,12 @@
+# The agent image has no use for the frontend, the local virtualenv, or the
+# development database — and copying them would slow every build.
+web
+.venv
+venv
+data
+.git
+.langgraph_api
+__pycache__
+*.sqlite
+.env
+.env.deploy
