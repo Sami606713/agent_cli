@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.13.1] - 2026-08-15
+
+### Fixed
+
+- **A project scaffolded with `--no-frontend` could not be deployed.** `deploy`
+  wrote a `web/Dockerfile` beside no application, and a compose service
+  pointing at that directory, so the build died on `COPY package.json ./`. The
+  web service and its files are now emitted only when the deployment actually
+  carries the UI. `--backend-only` does the same for a project that has a
+  frontend but wants to ship the agent alone.
+
+  Without a UI there is no proxy, so the agent publishes the port itself. That
+  inverts the security posture the frontend normally provides — the Agent
+  Server has no built-in authentication — so both the compose header and the
+  closing panel say the API is public and unauthenticated.
+
+- CI had been red on `main` through two releases. The lint job runs
+  `ruff format --check`, which nothing local ran; thirteen files were
+  unformatted. Ruff is now pinned in CI, so a ruff release cannot turn `main`
+  red without a change to this repository.
+
 ## [0.13.0] - 2026-08-15
 
 ### Added
