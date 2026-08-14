@@ -50,11 +50,7 @@ def dependency_drift(spec: AgentSpec, text: str) -> tuple[list[str], list[str]]:
     missing = [p for p in required if p not in present]
     # Only flag packages we manage; ignore anything the user added themselves.
     managed = {p.split(">=")[0].split("==")[0] for p in required}
-    extra = [
-        p
-        for p in present
-        if p not in required and p.split(">=")[0].split("==")[0] in managed
-    ]
+    extra = [p for p in present if p not in required and p.split(">=")[0].split("==")[0] in managed]
     return missing, extra
 
 

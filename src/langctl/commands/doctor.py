@@ -178,7 +178,9 @@ def _memory_check(spec: AgentSpec, root: Path) -> Check | None:
     uri = os.getenv("POSTGRES_URI") or _env_file_value(root / ".env", "POSTGRES_URI")
     if not uri:
         return Check(
-            "memory (postgres)", FAIL, "POSTGRES_URI is not set",
+            "memory (postgres)",
+            FAIL,
+            "POSTGRES_URI is not set",
             "Add POSTGRES_URI=postgresql://user:pass@host:5432/db to .env",
         )
 
@@ -196,7 +198,9 @@ def _memory_check(spec: AgentSpec, root: Path) -> Check | None:
     interpreter = _project_python(root)
     if interpreter is None:
         return Check(
-            "memory (postgres)", WARN, "cannot verify (no project venv)",
+            "memory (postgres)",
+            WARN,
+            "cannot verify (no project venv)",
             "Run `uv sync`, then `langctl doctor` again.",
         )
 
@@ -217,11 +221,15 @@ def _memory_check(spec: AgentSpec, root: Path) -> Check | None:
         return Check("memory (postgres)", OK, "reachable")
     if result.returncode == 2:
         return Check(
-            "memory (postgres)", FAIL, "psycopg is not installed in the project",
+            "memory (postgres)",
+            FAIL,
+            "psycopg is not installed in the project",
             "Run `uv sync` — langgraph-checkpoint-postgres provides it.",
         )
     return Check(
-        "memory (postgres)", FAIL, f"cannot connect: {result.stderr.strip() or 'unknown'}",
+        "memory (postgres)",
+        FAIL,
+        f"cannot connect: {result.stderr.strip() or 'unknown'}",
         "Check POSTGRES_URI and that the server is running.",
     )
 

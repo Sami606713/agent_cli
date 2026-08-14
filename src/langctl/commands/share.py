@@ -157,10 +157,7 @@ def share(
                 if not sup.processes[-1].is_running():
                     raise LangctlError(
                         f"{tunnel.name} exited before giving a URL",
-                        fix=(
-                            "Check the tunnel client is configured "
-                            f"({tunnel.install_hint})."
-                        ),
+                        fix=(f"Check the tunnel client is configured ({tunnel.install_hint})."),
                         detail=sup.processes[-1].log_tail(),
                     )
                 found_url.wait(0.25)

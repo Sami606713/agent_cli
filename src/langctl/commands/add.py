@@ -48,9 +48,7 @@ def _report(written: list, skipped: list) -> None:
     for path in written:
         console.print(f"  [green]+[/green] {path.name}")
     if skipped:
-        console.print(
-            f"  [dim]{len(skipped)} file(s) already existed and were left alone:[/dim]"
-        )
+        console.print(f"  [dim]{len(skipped)} file(s) already existed and were left alone:[/dim]")
         for path in skipped:
             console.print(f"    [dim]· {path.name}[/dim]")
 
@@ -239,8 +237,7 @@ def add_tool(
             "  [yellow]![/yellow] could not auto-register — add these to tools/__init__.py:"
         )
         console.print(
-            f"      [cyan]from {project.spec.package_name}.tools.{module} "
-            f"import {symbol}[/cyan]"
+            f"      [cyan]from {project.spec.package_name}.tools.{module} import {symbol}[/cyan]"
         )
         console.print(f"      [cyan]TOOLS = [..., {symbol}][/cyan]")
 
@@ -263,8 +260,9 @@ def add_middleware(
             mark = "[green]on [/green]" if mw.key in enabled else "[dim]off[/dim]"
             console.print(f"  {mark} [cyan]{mw.key:20s}[/cyan] {mw.summary}")
         if spec.middleware.custom:
-            console.print(f"  [green]on [/green] [cyan]custom[/cyan]: "
-                          f"{', '.join(spec.middleware.custom)}")
+            console.print(
+                f"  [green]on [/green] [cyan]custom[/cyan]: {', '.join(spec.middleware.custom)}"
+            )
         return
 
     if custom:
@@ -279,9 +277,7 @@ def add_middleware(
 
     mw = REGISTRY.get(name)
     if mw is None:
-        raise LangctlError(
-            f"Unknown middleware {name!r}", fix="langctl add middleware --list"
-        )
+        raise LangctlError(f"Unknown middleware {name!r}", fix="langctl add middleware --list")
     if mw.requires_provider and spec.model.provider != mw.requires_provider:
         raise LangctlError(
             f"{name} requires the {mw.requires_provider} provider; "
@@ -301,10 +297,7 @@ def add_middleware(
         # the constructor raises rather than defaulting.
         raise LangctlError(
             f"{name} needs {' and '.join(absent)} before it can be enabled",
-            fix=(
-                f"Add it under middleware.{name} in agent.yaml, then run "
-                "`langctl sync`."
-            ),
+            fix=(f"Add it under middleware.{name} in agent.yaml, then run `langctl sync`."),
         )
 
     block[name] = settings
@@ -312,8 +305,9 @@ def add_middleware(
 
     if mw.note:
         console.print(f"  [dim]{mw.note}[/dim]")
-    for a, b in conflicts_in([k for k, v in block.items()
-                              if isinstance(v, dict) and v.get("enabled")]):
+    for a, b in conflicts_in(
+        [k for k, v in block.items() if isinstance(v, dict) and v.get("enabled")]
+    ):
         console.print(
             f"  [yellow]![/yellow] {a} and {b} overlap in purpose; "
             "enabling both may produce surprising behaviour."

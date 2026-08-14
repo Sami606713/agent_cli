@@ -28,6 +28,7 @@ def _default_middleware() -> dict[str, Any]:
 
     return default_config()
 
+
 Runtime = Literal["python", "node"]
 Mode = Literal["proxy", "embedded"]
 FrontendKind = Literal["agent_chat_ui", "none"]
@@ -416,8 +417,7 @@ class AgentSpec(BaseModel):
             raise ValueError("frontend.enabled is true but frontend.kind is 'none'")
         if self.frontend.enabled and self.frontend.port == self.backend.port:
             raise ValueError(
-                f"frontend.port and backend.port are both {self.frontend.port}; "
-                "they must differ"
+                f"frontend.port and backend.port are both {self.frontend.port}; they must differ"
             )
         return self
 

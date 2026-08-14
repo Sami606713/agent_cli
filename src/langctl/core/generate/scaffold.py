@@ -98,9 +98,7 @@ def middleware_context(spec: AgentSpec) -> dict[str, Any]:
     imports = [
         (module, _import_names(sorted(names))) for module, names in sorted(by_module.items())
     ]
-    custom = [
-        {"name": name, "cls": _custom_class_name(name)} for name in spec.middleware.custom
-    ]
+    custom = [{"name": name, "cls": _custom_class_name(name)} for name in spec.middleware.custom]
     return {
         "middleware_imports": imports,
         "middleware_entries": rendered,

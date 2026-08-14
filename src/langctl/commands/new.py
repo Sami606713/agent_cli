@@ -38,8 +38,6 @@ console = Console()
 UI_CHOICES = {"agent-chat-ui": "agent_chat_ui"}
 
 
-
-
 def slugify(text: str) -> str:
     slug = re.sub(r"[^a-z0-9-]+", "-", text.lower()).strip("-")
     return re.sub(r"-{2,}", "-", slug)
@@ -189,9 +187,7 @@ def new(
         None, "--model-package", help="Package supplying a provider langctl does not know."
     ),
     frontend: bool = typer.Option(None, "--frontend/--no-frontend"),
-    ui: str = typer.Option(
-        None, "--ui", help="Chat UI. Only agent-chat-ui is available."
-    ),
+    ui: str = typer.Option(None, "--ui", help="Chat UI. Only agent-chat-ui is available."),
     memory: bool = typer.Option(
         None, "--memory/--no-memory", help="Long-term memory. Default: enabled."
     ),
@@ -212,17 +208,13 @@ def new(
     """Create a new agent project."""
     if name is None:
         if yes:
-            raise LangctlError(
-                "A project name is required with --yes", fix="langctl new my-agent"
-            )
+            raise LangctlError("A project name is required with --yes", fix="langctl new my-agent")
         name = Prompt.ask("Project name", default="my-agent")
     name = slugify(name)
 
     if runtime is None:
         runtime = (
-            "python"
-            if yes
-            else Prompt.ask("Runtime", choices=["python", "node"], default="python")
+            "python" if yes else Prompt.ask("Runtime", choices=["python", "node"], default="python")
         )
 
     if frontend is None:
@@ -270,8 +262,7 @@ def new(
         if yes:
             raise LangctlError(
                 f"--model is required for {model_provider}",
-                fix="langctl new my-agent --model-provider "
-                f"{model_provider} --model <model-name>",
+                fix=f"langctl new my-agent --model-provider {model_provider} --model <model-name>",
             )
         if model_provider == "ollama":
             console.print(

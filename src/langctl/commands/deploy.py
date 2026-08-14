@@ -66,8 +66,7 @@ def _run(argv: list[str], cwd: Path, what: str) -> None:
 def _quiet(argv: list[str]) -> bool:
     """Run a probe, discarding output. True when it exits 0."""
     return (
-        subprocess.run(argv, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode
-        == 0
+        subprocess.run(argv, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode == 0
     )
 
 
@@ -95,9 +94,7 @@ def _ensure_postgres_memory(project: Project, spec, *, keep_sqlite: bool):
         )
         return spec
 
-    console.print(
-        f"\n[bold]memory[/bold] [dim]{memory.long_term.backend} → postgres[/dim]"
-    )
+    console.print(f"\n[bold]memory[/bold] [dim]{memory.long_term.backend} → postgres[/dim]")
     updated = memory.model_dump()
     updated["long_term"]["backend"] = "postgres"
     # `path` is left as it is: it means nothing to a Postgres store, and the
@@ -116,9 +113,7 @@ def _ensure_postgres_memory(project: Project, spec, *, keep_sqlite: bool):
         console.print("  [green]✓[/green] agent.yaml")
     if sync_dependencies(new_spec, project.root / "pyproject.toml"):
         console.print("  [green]✓[/green] pyproject.toml (psycopg)")
-    console.print(
-        "  [dim]the stack's Postgres is used; --keep-sqlite opts out[/dim]"
-    )
+    console.print("  [dim]the stack's Postgres is used; --keep-sqlite opts out[/dim]")
     return new_spec
 
 

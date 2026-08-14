@@ -46,16 +46,27 @@ PROVIDERS: dict[str, Provider] = {
     for p in (
         Provider("anthropic", "langchain-anthropic>=1.0", "ANTHROPIC_API_KEY", "claude-opus-5"),
         Provider("openai", "langchain-openai>=1.0", "OPENAI_API_KEY", "gpt-5.5"),
-        Provider("google_genai", "langchain-google-genai>=2.0", "GOOGLE_API_KEY",
-                 "gemini-2.5-pro"),
-        Provider("google_vertexai", "langchain-google-vertexai>=3.0",
-                 "GOOGLE_APPLICATION_CREDENTIALS", "gemini-2.5-pro",
-                 note="Uses a service-account file, not an API key."),
-        Provider("azure_openai", "langchain-openai>=1.0", "AZURE_OPENAI_API_KEY",
-                 note="Also needs AZURE_OPENAI_ENDPOINT."),
+        Provider("google_genai", "langchain-google-genai>=2.0", "GOOGLE_API_KEY", "gemini-2.5-pro"),
+        Provider(
+            "google_vertexai",
+            "langchain-google-vertexai>=3.0",
+            "GOOGLE_APPLICATION_CREDENTIALS",
+            "gemini-2.5-pro",
+            note="Uses a service-account file, not an API key.",
+        ),
+        Provider(
+            "azure_openai",
+            "langchain-openai>=1.0",
+            "AZURE_OPENAI_API_KEY",
+            note="Also needs AZURE_OPENAI_ENDPOINT.",
+        ),
         Provider("azure_ai", "langchain-azure-ai>=1.0", "AZURE_AI_API_KEY"),
-        Provider("bedrock", "langchain-aws>=1.0", "AWS_ACCESS_KEY_ID",
-                 note="Uses the standard AWS credential chain."),
+        Provider(
+            "bedrock",
+            "langchain-aws>=1.0",
+            "AWS_ACCESS_KEY_ID",
+            note="Uses the standard AWS credential chain.",
+        ),
         Provider("bedrock_converse", "langchain-aws>=1.0", "AWS_ACCESS_KEY_ID"),
         Provider("anthropic_bedrock", "langchain-aws>=1.0", "AWS_ACCESS_KEY_ID"),
         Provider("cohere", "langchain-cohere>=1.0", "COHERE_API_KEY"),
@@ -71,14 +82,28 @@ PROVIDERS: dict[str, Provider] = {
         Provider("ibm", "langchain-ibm>=1.0", "WATSONX_APIKEY"),
         Provider("upstage", "langchain-upstage>=1.0", "UPSTAGE_API_KEY"),
         Provider("baseten", "langchain-baseten>=1.0", "BASETEN_API_KEY"),
-        Provider("litellm", "langchain-litellm>=1.0", None, model_from_env=True,
-                 note="Set MODEL_NAME to whatever your proxy routes to."),
-        Provider("huggingface", "langchain-huggingface>=1.0", "HUGGINGFACEHUB_API_TOKEN",
-                 model_from_env=True,
-                 note="Set MODEL_NAME to the repo id you want to run."),
-        Provider("ollama", "langchain-ollama>=1.0", None, model_from_env=True,
-                 note="Runs locally; no API key. Set MODEL_NAME to a model you "
-                      "have pulled — check with `ollama list`."),
+        Provider(
+            "litellm",
+            "langchain-litellm>=1.0",
+            None,
+            model_from_env=True,
+            note="Set MODEL_NAME to whatever your proxy routes to.",
+        ),
+        Provider(
+            "huggingface",
+            "langchain-huggingface>=1.0",
+            "HUGGINGFACEHUB_API_TOKEN",
+            model_from_env=True,
+            note="Set MODEL_NAME to the repo id you want to run.",
+        ),
+        Provider(
+            "ollama",
+            "langchain-ollama>=1.0",
+            None,
+            model_from_env=True,
+            note="Runs locally; no API key. Set MODEL_NAME to a model you "
+            "have pulled — check with `ollama list`.",
+        ),
     )
 }
 

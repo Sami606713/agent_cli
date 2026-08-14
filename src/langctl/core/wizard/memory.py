@@ -119,9 +119,7 @@ def ask_memory(chat_provider: str, *, accept_defaults: bool = False) -> dict[str
             default=suggested,
         )
         embeddings["provider"] = provider
-        embeddings["model"] = Prompt.ask(
-            "  Model", default=DEFAULT_EMBEDDING_MODEL[provider]
-        )
+        embeddings["model"] = Prompt.ask("  Model", default=DEFAULT_EMBEDDING_MODEL[provider])
     else:
         # Custom: we cannot know the vector width, and guessing it is
         # unrecoverable — a wrong value means re-embedding everything later.
@@ -138,9 +136,7 @@ def ask_memory(chat_provider: str, *, accept_defaults: bool = False) -> dict[str
         console.print(f"  [dim]{identifier} → {known} dimensions[/dim]")
     elif "dims" not in embeddings:
         embeddings["dims"] = int(
-            Prompt.ask(
-                f"  Dimensions for {identifier} (not in the known table)", default="768"
-            )
+            Prompt.ask(f"  Dimensions for {identifier} (not in the known table)", default="768")
         )
 
     memory["long_term"]["embeddings"] = embeddings

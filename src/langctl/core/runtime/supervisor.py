@@ -205,9 +205,7 @@ class StartupFailure(RuntimeError):
 #: Signals that mean "shut down". SIGTERM is not optional: CI runners, `timeout`,
 #: `docker stop`, and IDE stop buttons all send it, and the default disposition
 #: kills us instantly — orphaning every child and leaving their ports held.
-SHUTDOWN_SIGNALS = (signal.SIGINT, signal.SIGTERM) + (
-    () if IS_WINDOWS else (signal.SIGHUP,)
-)
+SHUTDOWN_SIGNALS = (signal.SIGINT, signal.SIGTERM) + (() if IS_WINDOWS else (signal.SIGHUP,))
 
 
 class Supervisor:
@@ -281,9 +279,7 @@ class Supervisor:
                 # No gate: still catch an immediate crash (bad flag, missing module).
                 time.sleep(0.3)
                 if not proc.is_running():
-                    raise StartupFailure(
-                        proc, f"exited immediately with code {proc.returncode}"
-                    )
+                    raise StartupFailure(proc, f"exited immediately with code {proc.returncode}")
                 continue
 
             result = self._await_health(proc, spec, on_wait)

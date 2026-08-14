@@ -18,7 +18,9 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-      - run: pip install ruff
+      # Pinned: an unpinned install means a ruff release can turn main red
+      # with no change to this repository, which is what happened here.
+      - run: pip install ruff==0.16.2
       - run: ruff check src/
       - run: ruff format --check src/
 

@@ -115,9 +115,7 @@ def _drop(result: RenderResult, paths: list[Path], *, unlink: bool) -> RenderRes
     )
 
 
-def missing_files(
-    root: Path, *, domain: str | None = None, frontend: bool = True
-) -> list[str]:
+def missing_files(root: Path, *, domain: str | None = None, frontend: bool = True) -> list[str]:
     """Which stack files are absent from *root*."""
     expected = [*STACK_FILES]
     if frontend:

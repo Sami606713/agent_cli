@@ -30,9 +30,7 @@ def _resolve_port(preferred: int, role: str, auto: bool) -> int:
     if not auto:
         raise PortInUse(preferred, role, describe_port_holder(preferred))
     chosen = find_free_port(preferred + 1)
-    console.print(
-        f"[yellow]![/yellow] port {preferred} ({role}) is busy — using {chosen} instead"
-    )
+    console.print(f"[yellow]![/yellow] port {preferred} ({role}) is busy — using {chosen} instead")
     return chosen
 
 
@@ -124,9 +122,7 @@ def dev(
     api_port = DOCKER_PORT if docker else (backend_port or spec.backend.port)
     if wants_backend and not docker:
         api_port = _resolve_port(api_port, "agent", auto_port)
-    web_port = (
-        _resolve_port(port or spec.frontend.port, "web", auto_port) if has_frontend else None
-    )
+    web_port = _resolve_port(port or spec.frontend.port, "web", auto_port) if has_frontend else None
 
     api_url = f"http://127.0.0.1:{api_port}"
 
