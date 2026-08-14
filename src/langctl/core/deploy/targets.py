@@ -29,17 +29,24 @@ ENV_FILE = ".env.deploy"
 
 #: Checked before anything is built. Discovering a missing key after a
 #: ten-minute image build is a bad way to find out.
-REQUIRED_SECRETS = ("POSTGRES_PASSWORD", "LANGSMITH_API_KEY")
+#:
+#: The default stack needs none of these — the in-memory agent server has no
+#: licence check, no database and no LangSmith requirement. Only the licensed
+#: stack, which runs LangChain's production Agent Server, does.
+LICENSED_SECRETS = ("POSTGRES_PASSWORD",)
 
 #: Values shipped in the example file that are not real secrets.
 PLACEHOLDERS = frozenset({"", "change-me"})
 
-#: Without this the Agent Server still starts, using the LangSmith API key, but
-#: production use of a self-hosted server that way is outside LangChain's
-#: licence terms. langctl warns rather than blocks: whether a given deployment
-#: is "production" is not ours to decide, and staging on your own box is
-#: legitimate.
+#: Required only by the licensed stack. LangChain's production Agent Server
+#: validates this at start-up and refuses to boot without it (or a LangSmith
+#: key on an account with Agent Server access) — the check lives inside their
+#: image, so it cannot be turned off from here. The default stack sidesteps it
+#: by running the in-memory server, which has no such gate.
 LICENCE_KEY = "LANGGRAPH_CLOUD_LICENSE_KEY"
+
+#: Either of these satisfies the licensed server's start-up check.
+LICENCE_ALTERNATIVES = (LICENCE_KEY, "LANGSMITH_API_KEY")
 
 #: Never uploaded, never baked into an image.
 RSYNC_EXCLUDES = (
@@ -189,12 +196,24 @@ def read_env_file(path: Path) -> dict[str, str]:
     return values
 
 
-def missing_secrets(env: dict[str, str], model_key_env: str | None) -> list[str]:
-    """Required values that are absent, empty, or still the placeholder."""
-    required = [*REQUIRED_SECRETS]
-    if model_key_env:
-        required.append(model_key_env)
-    return [key for key in required if env.get(key, "").strip() in PLACEHOLDERS]
+def missing_secrets(
+    env: dict[str, str], model_key_env: str | None, *, licensed: bool = False
+) -> list[str]:
+    """Required values that are absent, empty, or still the placeholder.
+
+    The model key is the only thing the default stack needs. LangSmith is not
+    required at all: tracing is opt-in, and the in-memory agent server has no
+    licence check to satisfy.
+    """
+    required = [model_key_env] if model_key_env else []
+    if licensed:
+        required += LICENSED_SECRETS
+    missing = [key for key in required if env.get(key, "").strip() in PLACEHOLDERS]
+
+    if licensed and all(env.get(k, "").strip() in PLACEHOLDERS for k in LICENCE_ALTERNATIVES):
+        # Neither form of licence is present; the server will refuse to start.
+        missing.append(" or ".join(LICENCE_ALTERNATIVES))
+    return missing
 
 
 def shell_quote(arg: str) -> str:

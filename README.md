@@ -368,11 +368,17 @@ The startup order is enforced by health checks: Postgres and Redis become health
 the agent starts and answers `/ok` → only then does the UI start. A deploy that fails
 exits non-zero instead of handing back a URL that does not load.
 
-> **The Agent Server is licensed.** Self-hosting it in production needs a
-> `LANGGRAPH_CLOUD_LICENSE_KEY` from a LangSmith Enterprise plan. It starts without one
-> using your LangSmith API key, and `deploy` warns rather than blocks — but that is
-> outside LangChain's terms for production use. The licence-free paths are
-> `langctl share` and LangSmith Cloud.
+**No licence needed, and LangSmith is optional.** The default stack runs the
+in-memory agent server, which has no licence check and needs neither Postgres nor
+Redis — verified starting with no LangSmith key at all, in 162 MB. State is kept on a
+volume, so it survives restarts. Tracing is opt-in: set `LANGSMITH_TRACING=true` and a
+key in `.env.deploy` only if you want traces.
+
+For queue autoscaling, multi-replica scaling and graceful run draining, add
+`--licensed` to run LangChain's production Agent Server instead. That one validates a
+`LANGGRAPH_CLOUD_LICENSE_KEY` at start-up and refuses to boot without it — the check
+lives inside LangChain's image, so it cannot be disabled — and it brings Postgres and
+Redis with it.
 
 ## Configuration
 

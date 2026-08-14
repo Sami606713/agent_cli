@@ -1,27 +1,39 @@
 # One stack. Both halves deploy together or not at all.
 #
-#   browser ──▶ {% if domain %}caddy ──▶ {% endif %}web ──▶ /api ──▶ agent ──▶ postgres · redis
-#                        {% if domain %}TLS{% else %}   {% endif %}      public          private
+#   browser ──▶ {% if domain %}caddy ──▶ {% endif %}web ──▶ /api ──▶ agent{% if licensed %} ──▶ postgres · redis{% else %} ──▶ /data{% endif %}
+
 #
 # The frontend reaches the agent at http://agent:8000 — a name on the private
-# network that never changes. There is no deployment URL to copy anywhere, which
-# is the whole point: a redeployed agent cannot break the frontend, because the
+# network that never changes. There is no deployment URL to copy anywhere,
+# which is the point: a redeployed agent cannot break the frontend, because the
 # frontend was never told an address.
 #
-# Only {% if domain %}caddy{% else %}web{% endif %} publishes a port. The Agent Server has no route in from outside,
-# so the LangSmith key stays in the frontend's server-side proxy, exactly as it
-# does under `langctl dev`.
+# Only {% if domain %}caddy{% else %}web{% endif %} publishes a port. The agent has no route in from outside, so
+# the LangSmith key — when there is one — stays in the frontend's server-side
+# proxy, exactly as it does under `langctl dev`.
+{% if not licensed %}
+#
+# This is the licence-free stack: the agent runs the in-memory server, which
+# needs no LangSmith licence key and no Postgres or Redis. State is pickled to
+# the agentdata volume. Use `langctl deploy --licensed` for the full Agent
+# Server once you have a licence.
+{% endif %}
 
 name: {{ name }}
 
 volumes:
+{% if licensed %}
   pgdata:
+{% else %}
+  agentdata:
+{% endif %}
 {% if domain %}
   caddy_data:
   caddy_config:
 {% endif %}
 
 services:
+{% if licensed %}
   postgres:
     image: postgres:16-alpine
     environment:
@@ -40,7 +52,7 @@ services:
 
   redis:
     image: redis:7-alpine
-    # Redis is only the pub/sub broker for streaming. Durable state lives in
+    # Redis is only the pub/sub broker for streaming; durable state lives in
     # Postgres, so persistence here would cost disk and buy nothing.
     command: ["redis-server", "--save", "", "--appendonly", "no"]
     healthcheck:
@@ -50,29 +62,35 @@ services:
       retries: 10
     restart: unless-stopped
 
+{% endif %}
   agent:
-    # Dockerfile.agent comes from `langgraph dockerfile`, which reads
-    # langgraph.json — the only thing that knows the base image, the Python
-    # version and the dependency set. Building here rather than pushing a
-    # prebuilt image means a remote host builds its own, with no registry.
     build:
       context: .
       dockerfile: Dockerfile.agent
     image: {{ name }}-agent:latest
     env_file:
       - .env.deploy
+{% if licensed %}
     environment:
       DATABASE_URI: postgres://postgres:${POSTGRES_PASSWORD}@postgres:5432/{{ pkg }}?sslmode=disable
       REDIS_URI: redis://redis:6379/0
+{% else %}
+    volumes:
+      # Threads, checkpoints and long-term memory. Without this every restart
+      # begins with an empty agent.
+      - agentdata:/data
+{% endif %}
     expose:
       - "8000"
+{% if licensed %}
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
+{% endif %}
     healthcheck:
-      # The base image ships Python but not curl, so probe with Python.
+      # The image ships Python but not curl, so probe with Python.
       test:
         - CMD-SHELL
         - python -c "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/ok').status==200 else 1)"
@@ -94,10 +112,11 @@ services:
         NEXT_PUBLIC_ASSISTANT_ID: {{ graph_id }}
     image: {{ name }}-web:latest
     environment:
-      # Server-side only. The browser never learns this address; the API key
-      # rides along inside the passthrough route, never in the bundle.
+      # Server-side only. The browser never learns this address, and the API
+      # key — if you set one — rides inside the passthrough route, never in the
+      # bundle. Empty is fine: the agent needs no auth on a private network.
       LANGGRAPH_API_URL: http://agent:8000
-      LANGSMITH_API_KEY: ${LANGSMITH_API_KEY:?set LANGSMITH_API_KEY in .env.deploy}
+      LANGSMITH_API_KEY: ${LANGSMITH_API_KEY:-}
       PORT: "3000"
 {% if domain %}
     expose:
@@ -115,7 +134,7 @@ services:
   caddy:
     image: caddy:2-alpine
     # Caddy obtains and renews a Let's Encrypt certificate for {{ domain }} on
-    # its own. Port 80 must stay open: it is how the ACME challenge is answered.
+    # its own. Port 80 must stay open: it answers the ACME challenge.
     ports:
       - "80:80"
       - "443:443"

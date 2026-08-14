@@ -53,9 +53,15 @@ class TestOneStack:
         for rel in STACK_FILES:
             assert (root / rel).is_file(), rel
 
-    def test_all_four_services_in_one_file(self, project):
+    def test_the_default_stack_is_agent_and_web_only(self, project):
+        """No licence, no databases: the in-memory server needs neither."""
         spec, root = project
         emit(spec, root)
+        assert set(compose_of(root)["services"]) == {"web", "agent"}
+
+    def test_the_licensed_stack_adds_its_databases(self, project):
+        spec, root = project
+        emit(spec, root, licensed=True)
         assert set(compose_of(root)["services"]) == {"web", "agent", "postgres", "redis"}
 
     def test_the_frontend_is_never_told_an_address(self, project):
@@ -65,13 +71,16 @@ class TestOneStack:
         web = compose_of(root)["services"]["web"]
         assert web["environment"]["LANGGRAPH_API_URL"] == "http://agent:8000"
 
-    def test_only_the_frontend_is_published(self, project):
+    @pytest.mark.parametrize("licensed", [False, True])
+    def test_only_the_frontend_is_published(self, project, licensed):
         spec, root = project
-        emit(spec, root)
+        emit(spec, root, licensed=licensed)
         services = compose_of(root)["services"]
         assert services["web"]["ports"] == ["3000:3000"]
-        for name in ("agent", "postgres", "redis"):
-            assert "ports" not in services[name], f"{name} must not be reachable from outside"
+        for name, service in services.items():
+            if name == "web":
+                continue
+            assert "ports" not in service, f"{name} must not be reachable from outside"
 
     def test_the_agent_is_reachable_only_internally(self, project):
         spec, root = project
@@ -86,7 +95,7 @@ class TestOneStack:
 
     def test_the_agent_waits_for_its_databases(self, project):
         spec, root = project
-        emit(spec, root)
+        emit(spec, root, licensed=True)
         depends = compose_of(root)["services"]["agent"]["depends_on"]
         assert depends["postgres"]["condition"] == "service_healthy"
         assert depends["redis"]["condition"] == "service_healthy"
@@ -139,12 +148,26 @@ class TestSecretsStaySecret:
     )
     def test_placeholders_count_as_unset(self, value, missing):
         env = {"POSTGRES_PASSWORD": value, "LANGSMITH_API_KEY": "k"}
-        assert ("POSTGRES_PASSWORD" in missing_secrets(env, None)) is missing
+        found = missing_secrets(env, None, licensed=True)
+        assert ("POSTGRES_PASSWORD" in found) is missing
 
     def test_the_model_key_is_required_when_the_provider_needs_one(self):
         env = {"POSTGRES_PASSWORD": "p", "LANGSMITH_API_KEY": "k"}
         assert missing_secrets(env, "ANTHROPIC_API_KEY") == ["ANTHROPIC_API_KEY"]
         assert missing_secrets(env, None) == []
+
+    def test_langsmith_is_not_required_by_the_default_stack(self):
+        """Tracing is opt-in, and the in-memory server has no licence check."""
+        assert missing_secrets({"OPENAI_API_KEY": "sk-real"}, "OPENAI_API_KEY") == []
+
+    def test_the_licensed_stack_demands_a_licence_of_some_kind(self):
+        env = {"POSTGRES_PASSWORD": "p", "OPENAI_API_KEY": "sk-real"}
+        gaps = missing_secrets(env, "OPENAI_API_KEY", licensed=True)
+        assert any("LANGGRAPH_CLOUD_LICENSE_KEY" in g for g in gaps)
+        # Either form satisfies it.
+        assert missing_secrets(
+            {**env, "LANGSMITH_API_KEY": "lsv2_real"}, "OPENAI_API_KEY", licensed=True
+        ) == []
 
     def test_env_file_parsing_ignores_comments_and_blanks(self, tmp_path):
         path = tmp_path / ENV_FILE

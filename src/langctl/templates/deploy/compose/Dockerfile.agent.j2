@@ -1,0 +1,43 @@
+# The agent, without a licence gate.
+#
+# LangChain's production Agent Server image validates a licence key at start-up
+# and refuses to boot without one. The in-memory server that `langgraph dev`
+# runs does not — it is the same graph, the same HTTP API, and the same
+# protocol the chat UI speaks, so nothing above it changes.
+#
+# What you give up: Postgres-backed queues, multi-replica scaling and run
+# draining. State is pickled to /data, which survives restarts on a mounted
+# volume but is single-process. That is the right trade for one small host,
+# and `langctl deploy --licensed` switches to the full server when you have a
+# licence key.
+
+FROM python:3.11-slim AS base
+
+# uv resolves and installs far faster than pip, and honours requires-python.
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
+
+WORKDIR /app
+ENV UV_COMPILE_BYTECODE=1 \
+    UV_LINK_MODE=copy \
+    PYTHONUNBUFFERED=1 \
+    LANGGRAPH_CLI_NO_ANALYTICS=1
+
+# Dependencies first, so a source edit does not reinstall the world.
+COPY pyproject.toml uv.lock* README.md* ./
+COPY src ./src
+RUN uv sync --extra dev --frozen 2>/dev/null || uv sync --extra dev
+
+COPY langgraph.json ./
+
+# State lives here: checkpoints, threads and long-term memory. Mount a volume
+# on it or every restart starts empty.
+RUN mkdir -p /data
+ENV LANGGRAPH_STORE_PATH=/data
+
+EXPOSE 8000
+
+# --no-browser: nothing to open in a container.
+# --no-reload:  the file watcher costs memory and there is nothing to watch.
+CMD ["uv", "run", "langgraph", "dev", \
+     "--host", "0.0.0.0", "--port", "8000", \
+     "--no-browser", "--no-reload"]

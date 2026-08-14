@@ -19,7 +19,8 @@ from ..project.spec import AgentSpec
 #: Template layer, rendered into the project root.
 LAYER = "deploy/compose"
 
-#: Written by `langgraph dockerfile`, not by a template.
+#: Templated for the default stack; written by `langgraph dockerfile` for the
+#: licensed one, which needs the base image langgraph.json knows about.
 AGENT_DOCKERFILE = "Dockerfile.agent"
 
 #: Everything the stack needs, relative to the project root. Used to check that
@@ -34,7 +35,7 @@ STACK_FILES = (
 
 
 def deploy_context(
-    spec: AgentSpec, *, web_host_port: int, domain: str | None
+    spec: AgentSpec, *, web_host_port: int, domain: str | None, licensed: bool = False
 ) -> dict[str, Any]:
     """Scaffold context plus the values only deployment needs."""
     return {
@@ -43,6 +44,10 @@ def deploy_context(
         # When set, Caddy fronts the stack and terminates TLS; web stops
         # publishing a port of its own.
         "domain": domain,
+        # False: the in-memory agent server, which needs no licence, no
+        # Postgres and no Redis. True: LangChain's production Agent Server,
+        # which needs all three.
+        "licensed": licensed,
     }
 
 
@@ -52,6 +57,7 @@ def emit(
     *,
     web_host_port: int = 3000,
     domain: str | None = None,
+    licensed: bool = False,
     overwrite: bool = False,
 ) -> RenderResult:
     """Write the stack into *root*.
@@ -59,12 +65,19 @@ def emit(
     Existing files are kept unless *overwrite*, so a tuned compose file is not
     silently replaced on the next deploy.
     """
-    result = render_tree(
-        LAYER,
-        root,
-        deploy_context(spec, web_host_port=web_host_port, domain=domain),
-        overwrite=overwrite,
+    context = deploy_context(
+        spec, web_host_port=web_host_port, domain=domain, licensed=licensed
     )
+    result = render_tree(LAYER, root, context, overwrite=overwrite)
+    if licensed:
+        # `langgraph dockerfile` writes this one instead; ours would be
+        # overwritten anyway, and shipping both would be confusing.
+        dockerfile = root / AGENT_DOCKERFILE
+        dockerfile.unlink(missing_ok=True)
+        result = RenderResult(
+            written=[p for p in result.written if p != dockerfile],
+            skipped=[p for p in result.skipped if p != dockerfile],
+        )
     if domain:
         return result
     # Without a domain there is no Caddy service to read it, and a stray

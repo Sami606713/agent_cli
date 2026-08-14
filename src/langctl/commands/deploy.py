@@ -92,6 +92,11 @@ def deploy(
     service: str = typer.Option(
         None, "--service", help="With --logs: agent, web, postgres, redis."
     ),
+    licensed: bool = typer.Option(
+        False,
+        "--licensed",
+        help="Use LangChain's production Agent Server. Needs a licence key, Postgres and Redis.",
+    ),
     force: bool = typer.Option(False, "--force", help="Overwrite stack files you have edited."),
 ) -> None:
     """Deploy the app — frontend, agent and databases — to one host."""
@@ -122,16 +127,26 @@ def deploy(
 
     # ---- write the stack -------------------------------------------------
     console.print("[bold]stack[/bold]")
-    result = emit(spec, root, web_host_port=port, domain=domain, overwrite=force)
+    result = emit(
+        spec, root, web_host_port=port, domain=domain, licensed=licensed, overwrite=force
+    )
     for path in result.written:
         console.print(f"  [green]✓[/green] {path.relative_to(root)}")
     for path in result.skipped:
         console.print(f"  [dim]· {path.relative_to(root)} (yours, kept)[/dim]")
 
     write_langgraph_config(spec, project.langgraph_config_path)
-    langgraph = find_langgraph(root)
-    _run(write_agent_dockerfile(langgraph, root / AGENT_DOCKERFILE), root, "langgraph dockerfile")
-    console.print(f"  [green]✓[/green] {AGENT_DOCKERFILE}")
+    if licensed:
+        # Only the production image needs a generated Dockerfile: langgraph.json
+        # is the sole thing that knows its base image and Python version. The
+        # default stack ships its own, templated above.
+        langgraph = find_langgraph(root)
+        _run(
+            write_agent_dockerfile(langgraph, root / AGENT_DOCKERFILE),
+            root,
+            "langgraph dockerfile",
+        )
+        console.print(f"  [green]✓[/green] {AGENT_DOCKERFILE}")
 
     absent = missing_files(root, domain=domain)
     if absent:
@@ -146,22 +161,32 @@ def deploy(
         env_path.write_text(
             (root / f"{ENV_FILE}.example").read_text(encoding="utf-8"), encoding="utf-8"
         )
+        # Name what this stack actually needs. The licence-free stack wants
+        # only a model key; naming Postgres and LangSmith there sent people
+        # hunting for credentials they do not need.
+        needed = [spec.model.api_key_env] if spec.model.api_key_env else []
+        if licensed:
+            needed += ["POSTGRES_PASSWORD", "a licence key"]
         raise LangctlError(
             f"Created {ENV_FILE} — fill it in, then deploy again",
-            fix=f"Set POSTGRES_PASSWORD and LANGSMITH_API_KEY in {ENV_FILE}. Nothing was built.",
+            fix=(
+                f"Set {', '.join(needed)} in {ENV_FILE}. Nothing was built."
+                if needed
+                else f"Review {ENV_FILE}, then deploy again. Nothing was built."
+            ),
         )
 
     env = read_env_file(env_path)
-    if gaps := missing_secrets(env, spec.model.api_key_env):
+    if gaps := missing_secrets(env, spec.model.api_key_env, licensed=licensed):
         raise LangctlError(
             f"Still unset in {ENV_FILE}: {', '.join(gaps)}",
             fix="Fill those in and deploy again. Nothing was built.",
         )
-    if not env.get(LICENCE_KEY, "").strip():
+    if licensed and not env.get(LICENCE_KEY, "").strip():
         console.print(
             f"\n[yellow]![/yellow] [bold]{LICENCE_KEY} is not set.[/bold] The Agent Server "
-            "will start using your LangSmith API key, but LangChain's terms require a "
-            "licence key to run a self-hosted server in production."
+            "will try your LangSmith API key instead, and refuses to start if that "
+            "account has no Agent Server access."
         )
 
     if build_only:
