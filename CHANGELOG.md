@@ -7,6 +7,51 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.12.1] - 2026-08-15
+
+### Fixed
+
+- **Install hints no longer lose their extras.** A user hit "Required program
+  not found: langgraph", followed the fix exactly as printed —
+  `uv tool install 'langgraph-cli'` — and then `langctl dev` failed with
+  "Required package 'langgraph-api' is not installed". The hint langctl ships
+  is correct and says `langgraph-cli[inmem]`, but error panels render through
+  Rich, which reads `[...]` as a style tag and silently dropped `[inmem]`. We
+  told them to install the wrong package. Every interpolated field is now
+  escaped, not just the hint — the same panel pastes in upstream stderr, which
+  is exactly where unbalanced brackets come from.
+
+- **`langctl new` verifies its own work.** `uv sync --extra dev` already
+  installed everything into the project's `.venv`, but nothing checked the
+  result, so a skipped or failed install produced a project that looked
+  finished and then could not start. The scaffold now confirms the Agent Server
+  CLI actually landed, and the closing panel only reads "next steps" when the
+  project is genuinely ready. Otherwise it reads "almost there" and lists the
+  outstanding commands, install first, since nothing below it can work. Install
+  failures are reported in red with the tail of the real error rather than one
+  dim line.
+
+- **A global `langgraph` is no longer accepted.** `langgraph dev` imports the
+  agent in-process, so a globally installed CLI has its own isolated
+  environment and cannot import the project at all. Falling back to `PATH`
+  looked helpful and was the opposite: it turned a clear "not installed in this
+  project" into an import error pointing at the agent. `find_langgraph` now
+  names the project-local fix instead.
+
+- **`langctl doctor` no longer passes a project that cannot start.** On the
+  reported machine every row was green while `dev` was broken. Doctor now
+  checks that langgraph is the project's own, and imports `langgraph_api` with
+  the project interpreter — the thing `dev` actually requires.
+
+### Changed
+
+- The Python and frontend installs run concurrently. On a warm cache this saves
+  about three seconds of forty-one, because npm dominates; it matters on a cold
+  cache, where uv is also fetching an interpreter and the full LangChain tree.
+  Output is collected and printed in a fixed order once both finish, so the
+  summary cannot reorder itself between runs, and both outcomes are always
+  reported.
+
 ## [0.12.0] - 2026-08-14
 
 ### Added
