@@ -7,6 +7,90 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.12.0] - 2026-08-14
+
+### Added
+
+- **`langctl deploy` — the frontend and the agent ship together, in one
+  operation.** One command brings up one stack on one host: the chat UI, the
+  Agent Server, Postgres and Redis, behind a single URL.
+
+  ```
+  langctl deploy                        # this machine
+  langctl deploy --host user@1.2.3.4    # a host you own
+  langctl deploy --host … --domain x.io # the same, with automatic HTTPS
+  ```
+
+  The frontend reaches the agent at `http://agent:8000` — a service name on the
+  private network, not a URL. There is nothing to paste into a config and
+  nothing to update on the next deploy, so redeploying the agent cannot break
+  the UI. Only the frontend publishes a port; the Agent Server has no route in
+  from outside, so the LangSmith key stays server-side exactly as it does under
+  `langctl dev`.
+
+  Secrets live in `.env.deploy` and are checked *before* any image is built —
+  a missing key stops the command in a second rather than ten minutes into a
+  build. They are never uploaded by a deploy and never baked into an image; you
+  place them on the host once.
+
+  `--wait` on the compose start means a deploy that fails exits non-zero
+  instead of handing back a URL that does not load. With `--domain`, Caddy
+  joins the stack and obtains and renews a Let's Encrypt certificate on its
+  own; it deliberately does not compress `text/event-stream`, since buffering
+  the token stream to compress it is what makes an agent appear to hang and
+  then answer all at once.
+
+  Also `--logs`, `--down` (the database survives unless `--volumes`, which
+  prompts), `--build-only` and `--force`.
+
+- `next.config.mjs` in the generated frontend now sets `output: "standalone"`,
+  which is what lets the deployment image run without `node_modules`. It
+  changes nothing for `langctl dev`.
+
+## [0.11.1] - 2026-08-14
+
+### Fixed
+
+- **Child process output is decoded as UTF-8 on every platform.** `subprocess`
+  with `text=True` and no explicit encoding uses the *locale* codec. On Linux
+  and macOS that is UTF-8 and nothing goes wrong; on Windows it is the ANSI
+  codepage, and every tool langctl supervises emits UTF-8 — Next.js opens with
+  `▲ Next.js` and `✓ Ready in`.
+
+  On Western Windows (cp1252) this produced mojibake. On Japanese and Korean
+  installs (cp932, cp949) it raised `UnicodeDecodeError` on the very first
+  line — and because `UnicodeDecodeError` subclasses `ValueError`, the log
+  reader's own error handler swallowed it. The thread died silently before
+  delivering a single line: no child logs at all, an empty error panel when a
+  child failed to start, and `langctl share` never finding the tunnel URL it
+  was waiting for.
+
+- `langctl sync` crashed on Windows reading a `pyproject.toml` containing an em
+  dash — the same missing-encoding mistake, through `Path.read_text`.
+
+- The generated project declared `env` under `[tool.pytest.ini_options]`
+  without depending on `pytest-env`, so pytest ignored it with a warning.
+
+## [0.11.0] - 2026-08-14
+
+### Changed
+
+- **`core/` is organised into packages instead of twenty flat modules.**
+  Grouped along the dependency lines that already existed: `catalog/` for the
+  provider and middleware tables, `project/` for `agent.yaml`, `generate/` for
+  rendering, `runtime/` for subprocesses and health, `wizard/` for prompts,
+  with `errors.py` at the top so every package can import it without a cycle.
+  No behaviour changed; imports were the only edits.
+
+### Fixed
+
+- `langctl new` no longer prints `add your None to .env` for providers that
+  have no API key, such as Ollama and Bedrock.
+
+### Added
+
+- Contribution guidelines and CI workflows.
+
 ## [0.10.1] - 2026-08-13
 
 ### Fixed
