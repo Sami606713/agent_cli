@@ -371,6 +371,10 @@ class DeployTarget(BaseModel):
 
 
 class DeploySpec(BaseModel):
+    #: Where `langctl deploy` sends this project. None means it has never been
+    #: asked; the first deploy picks one and records it here, so the question is
+    #: asked once rather than every time.
+    target: str | None = None
     backend: DeployTarget = Field(default_factory=DeployTarget)
     frontend: DeployTarget = Field(default_factory=DeployTarget)
 

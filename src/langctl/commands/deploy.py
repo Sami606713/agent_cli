@@ -22,7 +22,10 @@ from pathlib import Path
 import typer
 from rich.console import Console
 from rich.panel import Panel
+from rich.prompt import Prompt
+from rich.table import Table
 
+from ..core.deploy import catalog
 from ..core.deploy.stack import AGENT_DOCKERFILE, emit, missing_files
 from ..core.deploy.targets import (
     ENV_FILE,
@@ -68,6 +71,77 @@ def _quiet(argv: list[str]) -> bool:
     return (
         subprocess.run(argv, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode == 0
     )
+
+
+def _choose_target(project: Project, spec, requested: str | None) -> str:
+    """Settle where this project deploys, asking at most once.
+
+    The answer is written into agent.yaml, so the question is asked on the
+    first deploy and never again. `--to` overrides it, both for CI and for
+    changing your mind.
+    """
+    chosen = requested or spec.deploy.target
+    if chosen and catalog.get(chosen) is None:
+        raise LangctlError(
+            f"Unknown deploy target {chosen!r}",
+            fix=f"Choose one of: {', '.join(catalog.keys())}",
+        )
+
+    if chosen is None:
+        chosen = _ask_target()
+
+    target = catalog.get(chosen)
+    assert target is not None
+
+    if target.status != "ready":
+        console.print(
+            Panel(
+                f"[bold]{target.label}[/bold] is not built yet.\n"
+                f"[dim]{target.cost}[/dim]\n\n"
+                f"{target.detail}\n\n"
+                "[dim]Every target ends with the same agent serving the same "
+                "requests; what differs is the bill and the account you need. "
+                "The VPS path works today and does the same job:[/dim]\n"
+                "  [bold]langctl deploy --to vps --host user@your-server[/bold]",
+                title="[bold]coming soon[/bold]",
+                border_style="yellow",
+                title_align="left",
+            )
+        )
+        raise typer.Exit(code=1)
+
+    # Remember it, but only once it is a target that can actually run.
+    if spec.deploy.target != chosen:
+        deploy_section = spec.deploy.model_dump()
+        deploy_section["target"] = chosen
+        merge_section(project.spec_path, "deploy", deploy_section)
+    return chosen
+
+
+def _ask_target() -> str:
+    """The picker. Shows cost and readiness, because those decide the answer."""
+    table = Table(box=None, padding=(0, 2, 0, 0), show_header=False)
+    table.add_column(justify="right", style="bold")
+    table.add_column()
+    table.add_column(style="dim")
+    table.add_column()
+    for index, target in enumerate(catalog.TARGETS, 1):
+        mark = (
+            "[green]available[/green]"
+            if target.status == "ready"
+            else "[yellow]coming soon[/yellow]"
+        )
+        table.add_row(str(index), target.label, target.cost, mark)
+        table.add_row("", f"[dim]{target.summary}[/dim]", "", "")
+
+    console.print("\n[bold]Where should this deploy?[/bold]\n")
+    console.print(table)
+    answer = Prompt.ask(
+        "\nChoose",
+        choices=[str(i) for i in range(1, len(catalog.TARGETS) + 1)],
+        default="1",
+    )
+    return catalog.TARGETS[int(answer) - 1].key
 
 
 def _ensure_postgres_memory(project: Project, spec, *, keep_sqlite: bool):
@@ -118,6 +192,7 @@ def _ensure_postgres_memory(project: Project, spec, *, keep_sqlite: bool):
 
 
 def deploy(
+    to: str = typer.Option(None, "--to", help=f"Deployment target: {', '.join(catalog.keys())}."),
     host: str = typer.Option(
         None, "--host", help="ssh destination to deploy to. Omit to deploy locally."
     ),
@@ -161,6 +236,11 @@ def deploy(
     """Deploy the app — frontend, agent and databases — to one host."""
     project = Project.load()
     root, spec = project.root, project.spec
+
+    # Lifecycle flags act on a stack that already exists, so they do not need
+    # to re-ask where it lives.
+    if not (logs or down):
+        _choose_target(project, spec, to)
 
     remote: Remote | None = parse_remote(host, remote_path, spec.name) if host else None
     where = remote.destination if remote else "this machine"
