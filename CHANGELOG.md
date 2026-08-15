@@ -7,6 +7,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.14.1] - 2026-08-15
+
+### Fixed
+
+- **Sending a message in the chat UI failed** with
+  `TypeError: Failed to construct 'URL': Invalid URL`.
+
+  `@langchain/langgraph-sdk` builds every request with
+  ``new URL(`${apiUrl}${path}`)``, which throws on a relative value —
+  `new URL("/api/threads")` has no base — and langctl points the UI at `/api`,
+  the same-origin passthrough route.
+
+  Not a regression: SDK 1.9.27, 1.9.28 and 1.9.29 are identical here. It is the
+  SDK's contract, and langctl was always misusing it. Upstream agent-chat-ui
+  does not hit it because its documented default is an absolute
+  `http://localhost:2024`.
+
+  It stayed hidden because only one of two code paths breaks. The health check
+  uses `fetch()`, which resolves relative paths itself, so the page loaded and
+  the agent reported healthy — the failure waited for the first message.
+
+  `Stream.tsx` now resolves a leading-slash value against
+  `window.location.origin` before the SDK sees it. Resolved in the browser
+  rather than baked in at build time, so one image serves localhost, a bare IP,
+  a tunnel and a custom domain with no rebuild; a build-time value would have
+  broken `langctl share` and any second hostname. Server rendering is guarded,
+  since Next renders client components once where `window` is undefined.
+
+  This is the second deliberate patch to the vendored chat UI, so `VENDORED.md`
+  now lists both rather than claiming the source is untouched, and five tests
+  fail if a re-sync drops them.
+
+  **Existing projects** need the one file copied across; `langctl add frontend`
+  will not overwrite a `web/` you may have edited.
+
 ## [0.14.0] - 2026-08-15
 
 ### Added
