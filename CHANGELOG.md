@@ -7,6 +7,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.14.0] - 2026-08-15
+
+### Added
+
+- **`langctl deploy` asks where to deploy, and says plainly what is not built
+  yet.** The picker lists five destinations with their cost and whether they
+  work, records the answer in `agent.yaml`, and never asks again. `--to` skips
+  it for CI or a change of mind.
+
+  ```
+  1  VPS — your own server   ~$5/mo             available
+  2  LangSmith Cloud         Plus plan + usage  coming soon
+  3  Google Cloud            ~$40-70/mo         coming soon
+  4  Azure                   ~$40-70/mo         coming soon
+  5  AWS                     ~$50-80/mo         coming soon
+  ```
+
+  Only VPS deploys today. The other four print what they will do and what they
+  will cost, then exit non-zero, so CI cannot mistake one for a success. The
+  choice is recorded only once it is a target that can actually run, so
+  selecting a planned one does not quietly rewrite `agent.yaml`.
+
+  Cost is in the table because it is the number most likely to decide the
+  answer, and the worst time to learn it is after deploying. Every target ends
+  with the same agent serving the same requests; what differs is the bill and
+  the account you need.
+
+  Two things the table states outright rather than leaving to be discovered:
+  LangSmith Cloud hosts the agent and **not** the chat UI, so it does not
+  satisfy the one-platform promise until the static-export and custom-auth work
+  is done; and the AWS entry is ECS Fargate, **not** LangSmith BYOC — BYOC is
+  an Enterprise-plan arrangement where LangChain provisions their own platform
+  into your account via Crossplane, installing LangSmith rather than your
+  agent, which langctl cannot drive.
+
 ## [0.13.2] - 2026-08-15
 
 ### Fixed
