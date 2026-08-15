@@ -137,6 +137,28 @@ const StreamSession = ({
 
 // Default values for the form
 const DEFAULT_API_URL = "http://localhost:2024";
+
+// --- langctl patch -------------------------------------------------------
+// The SDK builds every request with `new URL(`${apiUrl}${path}`)`, and that
+// throws on a relative value: `new URL("/api/threads")` is an Invalid URL
+// because it has no base. langctl points the UI at "/api" — the same-origin
+// passthrough route — so the value has to become absolute before it reaches
+// the SDK.
+//
+// Resolved in the browser rather than baked in at build time on purpose: one
+// image then serves localhost, a bare IP, a tunnel and a custom domain without
+// rebuilding, because the origin is whatever the page was actually loaded from.
+//
+// `fetch()` resolves relative paths by itself, which is why the health check in
+// this file worked and only sending a message failed.
+function resolveApiUrl(value: string | undefined): string | undefined {
+  if (!value || !value.startsWith("/")) return value;
+  // Server render: there is no origin yet. The value is replaced on hydration,
+  // before anything can call the SDK.
+  if (typeof window === "undefined") return value;
+  return `${window.location.origin}${value}`;
+}
+// --- end langctl patch ---------------------------------------------------
 const DEFAULT_ASSISTANT_ID = "agent";
 const AGENT_BUILDER_AUTH_SCHEME = "langsmith-api-key";
 
@@ -177,7 +199,7 @@ export const StreamProvider: React.FC<{ children: ReactNode }> = ({
   };
 
   // Determine final values to use, prioritizing URL params then env vars
-  const finalApiUrl = apiUrl || envApiUrl;
+  const finalApiUrl = resolveApiUrl(apiUrl || envApiUrl);
   const finalAssistantId = assistantId || envAssistantId;
   const finalAuthScheme = authScheme || envAuthScheme || "";
 

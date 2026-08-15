@@ -158,3 +158,44 @@ class TestLegacyKinds:
 
     def test_default_is_agent_chat_ui(self):
         assert AgentSpec(name="x-y").frontend.kind == "agent_chat_ui"
+
+
+class TestTheApiUrlIsAbsoluteBeforeItReachesTheSdk:
+    """`new URL("/api/threads")` throws: no base, so it is not a valid URL.
+
+    The SDK builds every request that way, so pointing the UI at the
+    same-origin proxy path meant the page loaded, the health check passed —
+    `fetch()` resolves relative paths by itself — and sending a message died
+    with "Failed to construct 'URL': Invalid URL".
+
+    Present in SDK 1.9.27, 1.9.28 and 1.9.29, so it is the contract rather than
+    a regression.
+    """
+
+    def test_the_patch_is_present(self, tmp_path):
+        build(tmp_path)
+        stream = (tmp_path / "web/src/providers/Stream.tsx").read_text(encoding="utf-8")
+        assert "resolveApiUrl" in stream, "the vendored patch was lost in a re-sync"
+
+    def test_the_url_is_resolved_before_use(self, tmp_path):
+        build(tmp_path)
+        stream = (tmp_path / "web/src/providers/Stream.tsx").read_text(encoding="utf-8")
+        assert "const finalApiUrl = resolveApiUrl(apiUrl || envApiUrl);" in stream
+
+    def test_it_resolves_against_the_page_origin(self, tmp_path):
+        # Not baked in at build time: one image has to serve localhost, an IP,
+        # a tunnel and a domain without rebuilding.
+        build(tmp_path)
+        stream = (tmp_path / "web/src/providers/Stream.tsx").read_text(encoding="utf-8")
+        assert "window.location.origin" in stream
+
+    def test_server_rendering_is_guarded(self, tmp_path):
+        # Next server-renders client components once, where window is undefined.
+        build(tmp_path)
+        stream = (tmp_path / "web/src/providers/Stream.tsx").read_text(encoding="utf-8")
+        assert 'typeof window === "undefined"' in stream
+
+    def test_the_patch_is_documented(self, tmp_path):
+        build(tmp_path)
+        note = (tmp_path / "web/VENDORED.md").read_text(encoding="utf-8")
+        assert "resolveApiUrl" in note and "next.config.mjs" in note
