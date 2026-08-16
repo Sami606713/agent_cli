@@ -433,6 +433,40 @@ class AgentSpec(BaseModel):
         return self.name.replace("-", "_")
 
     @property
+    def display_name(self) -> str:
+        """The project's name as a person would write it.
+
+        ``research-assistant`` becomes ``Research Assistant``. Used for the
+        browser tab and the chat UI's heading, so the app a user built is
+        named after their project rather than after the framework.
+        """
+        return " ".join(word.capitalize() for word in self.name.split("-") if word)
+
+    @property
+    def initials(self) -> str:
+        """One or two letters for the app's mark.
+
+        Two words give their initials (``research-assistant`` → ``RA``); a
+        single word gives its first two letters (``scout`` → ``SC``), because
+        one letter alone reads as an accident rather than a logo.
+        """
+        words = [word for word in self.name.split("-") if word]
+        if len(words) >= 2:
+            return (words[0][0] + words[1][0]).upper()
+        return words[0][:2].upper() if words else "AG"
+
+    @property
+    def brand_hue(self) -> int:
+        """A stable colour for the mark, derived from the name.
+
+        Deterministic so the icon never changes between renders, and spread
+        across the wheel so two projects rarely collide. Hue only — saturation
+        and lightness are fixed in the template, which keeps every generated
+        mark legible on both light and dark backgrounds.
+        """
+        return sum(ord(char) * (index + 1) for index, char in enumerate(self.name)) % 360
+
+    @property
     def graph_id(self) -> str:
         return "agent"
 

@@ -25,6 +25,11 @@ def render_context(spec: AgentSpec) -> dict[str, Any]:
         "runtime": spec.runtime,
         "mode": spec.mode,
         "graph_id": spec.graph_id,
+        # Branding: the generated app is named after the user's project, not
+        # after the framework that built it.
+        "display_name": spec.display_name,
+        "initials": spec.initials,
+        "brand_hue": spec.brand_hue,
         "model_provider": spec.model.provider,
         "model_name": spec.model.name,
         "model_key_env": spec.model.api_key_env,

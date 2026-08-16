@@ -40,5 +40,23 @@ Verified present in SDK 1.9.27, 1.9.28 and 1.9.29 — this is the SDK's contract
 not a regression. Upstream agent-chat-ui does not hit it because its documented
 default is an absolute `http://localhost:2024`.
 
-Both patches are marked in-file and covered by tests, so a re-sync that drops
-them fails the suite rather than shipping a broken UI.
+### Branding — the app is named after your project
+
+`src/components/icons/langgraph.tsx` is regenerated wholesale: it exports the
+project's display name as `APP_NAME` and draws a mark from the project's
+initials on a colour derived from its name. The filename and the exported
+component name are upstream's, so every import site keeps working untouched.
+
+`src/app/layout.tsx` takes the project name as the browser tab title, and
+`src/app/icon.svg` replaces the vendored `favicon.ico` — Next serves
+`app/icon.svg` as the tab icon, and shipping both would leave the browser
+choosing.
+
+`src/components/thread/index.tsx` is **patched, not templated**: it contains
+seven JSX style props written with double braces, which Jinja would consume as
+expressions. It imports `APP_NAME` and renders it in single braces, which Jinja
+never touches. Any file in this tree with JSX object props must be handled the
+same way.
+
+All patches are marked in-file and covered by tests, so a re-sync that drops
+them fails the suite rather than shipping a broken or unbranded UI.

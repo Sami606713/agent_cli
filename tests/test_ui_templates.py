@@ -199,3 +199,80 @@ class TestTheApiUrlIsAbsoluteBeforeItReachesTheSdk:
         build(tmp_path)
         note = (tmp_path / "web/VENDORED.md").read_text(encoding="utf-8")
         assert "resolveApiUrl" in note and "next.config.mjs" in note
+
+
+class TestTheAppIsNamedAfterTheProject:
+    """A user who builds `research-assistant` should see Research Assistant.
+
+    Upstream ships "Agent Chat" and LangChain's mark, which is right for
+    upstream and wrong for someone's own product.
+    """
+
+    def named(self, tmp_path, name="research-assistant"):
+        spec = AgentSpec(name=name)
+        scaffold(spec, tmp_path)
+        return tmp_path / "web"
+
+    def test_the_browser_tab_shows_the_project(self, tmp_path):
+        web = self.named(tmp_path)
+        layout = (web / "src/app/layout.tsx").read_text(encoding="utf-8")
+        assert 'title: "Research Assistant"' in layout
+        assert "LangChain" not in layout
+
+    def test_the_headings_show_the_project(self, tmp_path):
+        web = self.named(tmp_path)
+        thread = (web / "src/components/thread/index.tsx").read_text(encoding="utf-8")
+        assert "Agent Chat" not in thread
+        assert thread.count("{APP_NAME}") == 2
+
+    def test_the_name_comes_from_one_place(self, tmp_path):
+        web = self.named(tmp_path)
+        icon = (web / "src/components/icons/langgraph.tsx").read_text(encoding="utf-8")
+        assert 'export const APP_NAME = "Research Assistant";' in icon
+
+    def test_the_mark_uses_the_initials(self, tmp_path):
+        web = self.named(tmp_path)
+        icon = (web / "src/components/icons/langgraph.tsx").read_text(encoding="utf-8")
+        assert ">\n        RA\n      </text>" in icon
+        assert 'aria-label="Research Assistant"' in icon
+
+    def test_the_colour_is_derived_and_stable(self, tmp_path):
+        # Deterministic, so the icon does not change between builds.
+        web = self.named(tmp_path)
+        icon = (web / "src/components/icons/langgraph.tsx").read_text(encoding="utf-8")
+        expected = AgentSpec(name="research-assistant").brand_hue
+        assert f"hsl({expected} 62% 48%)" in icon
+
+    def test_the_tab_icon_replaces_the_vendored_favicon(self, tmp_path):
+        # Next serves app/icon.svg; shipping both leaves the browser choosing.
+        web = self.named(tmp_path)
+        assert (web / "src/app/icon.svg").is_file()
+        assert not (web / "src/app/favicon.ico").exists()
+        svg = (web / "src/app/icon.svg").read_text(encoding="utf-8")
+        assert ">RA</text>" in svg
+
+    def test_the_import_site_still_resolves(self, tmp_path):
+        # The component keeps upstream's name so no other file needs editing.
+        web = self.named(tmp_path)
+        thread = (web / "src/components/thread/index.tsx").read_text(encoding="utf-8")
+        assert 'import { APP_NAME, LangGraphLogoSVG } from "../icons/langgraph";' in thread
+
+    def test_jinja_never_reaches_the_jsx_props(self, tmp_path):
+        """index.tsx has JSX `{{ ... }}` style props; templating it ate them."""
+        web = self.named(tmp_path)
+        thread = (web / "src/components/thread/index.tsx").read_text(encoding="utf-8")
+        assert 'style={{ width: "100%", height: "100%" }}' in thread
+        assert "(Undefined, Undefined)" not in thread
+
+    @pytest.mark.parametrize(
+        "name,display,initials",
+        [
+            ("research-assistant", "Research Assistant", "RA"),
+            ("scout", "Scout", "SC"),
+            ("support-bot-pro", "Support Bot Pro", "SB"),
+        ],
+    )
+    def test_names_of_every_shape(self, tmp_path, name, display, initials):
+        spec = AgentSpec(name=name)
+        assert spec.display_name == display
+        assert spec.initials == initials
