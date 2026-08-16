@@ -7,6 +7,44 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.15.0] - 2026-08-17
+
+### Changed
+
+- **The chat UI is named after your project, not after the framework.**
+  Scaffolding `research-assistant` produced an app titled "Agent Chat", with
+  LangChain's mark as the logo and their favicon in the tab — correct for
+  upstream agent-chat-ui, wrong for someone's own product.
+
+  | | before | after |
+  |---|---|---|
+  | Browser tab | Agent Chat | Research Assistant |
+  | Header | Agent Chat | Research Assistant |
+  | Empty state | Agent Chat | Research Assistant |
+  | Logo and tab icon | LangChain's mark | `RA` on a colour from the name |
+
+  `AgentSpec` gained three derived properties so one definition feeds every
+  template: `display_name` (`research-assistant` → `Research Assistant`),
+  `initials` (`RA`; a single-word name takes its first two letters, since one
+  letter reads as an accident rather than a logo), and `brand_hue`, summed from
+  the name so the mark never changes between builds and two projects rarely
+  collide. Only the hue varies — saturation and lightness are fixed in the
+  template, keeping every generated mark legible on light and dark backgrounds.
+
+  The icon component keeps upstream's filename and exported name, so every
+  import site works untouched, and it now also exports `APP_NAME` as the single
+  source of the name. The vendored `favicon.ico` is replaced by a generated
+  `app/icon.svg`, which is what Next serves as the tab icon; shipping both would
+  leave the browser choosing.
+
+  `index.tsx` is patched rather than templated. It holds seven JSX style props
+  written with double braces, which Jinja consumed when it was first templated —
+  the same trap that produced `(Undefined, Undefined)` earlier in this project.
+  It imports `APP_NAME` and renders it in single braces instead, and a test pins
+  the style props intact.
+
+  **Existing projects** keep their current `web/`; regenerate to pick this up.
+
 ## [0.14.1] - 2026-08-15
 
 ### Fixed
