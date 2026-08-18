@@ -43,8 +43,8 @@ def render_context(spec: AgentSpec) -> dict[str, Any]:
         "model_from_env": spec.model.model_from_env,
         "langsmith": spec.observability.langsmith,
         "langsmith_project": spec.observability.project or spec.name,
-        "backend_port": spec.backend.port,
-        "frontend_port": spec.frontend.port,
+        "backend_port": spec.ports.agent,
+        "frontend_port": spec.ports.frontend,
         # agent-chat-ui mounts its passthrough at /api and we vendor its source
         # unmodified, so the prefix is fixed rather than configurable.
         "proxy_prefix": "/api",
