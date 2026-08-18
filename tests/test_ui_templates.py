@@ -89,7 +89,7 @@ class TestSetupScreenIsBypassed:
         assert "LANGGRAPH_API_URL=http://127.0.0.1:2024" in env
 
     def test_backend_port_is_honoured(self, tmp_path):
-        spec = AgentSpec(name="demo-agent", backend={"port": 2500})
+        spec = AgentSpec(name="demo-agent", ports={"agent": 2500})
         scaffold(spec, tmp_path)
         assert "LANGGRAPH_API_URL=http://127.0.0.1:2500" in (
             tmp_path / "web/.env.example"

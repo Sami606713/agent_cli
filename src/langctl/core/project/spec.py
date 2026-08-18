@@ -337,7 +337,6 @@ class MiddlewareSpec(BaseModel):
 class FrontendSpec(BaseModel):
     enabled: bool = True
     kind: FrontendKind = "agent_chat_ui"
-    port: int = 3000
     proxy_prefix: str = "/api/agent"
     generative_ui: bool = False
 
@@ -356,8 +355,18 @@ class FrontendSpec(BaseModel):
         return v.rstrip("/")
 
 
-class BackendSpec(BaseModel):
-    port: int = 2024
+class PortsSpec(BaseModel):
+    """Where this project's two local servers listen.
+
+    Configurable because the defaults collide with whatever else the machine is
+    already running — 3000 is every other Next.js app, 2024 is any other Agent
+    Server — and the alternative was editing generated source. Keys are named
+    for the roles `langctl dev` prints, `frontend` and `agent`, not for the spec
+    sections they used to live under.
+    """
+
+    frontend: int = Field(default=3000, ge=1, le=65535)
+    agent: int = Field(default=2024, ge=1, le=65535)
 
 
 class ObservabilitySpec(BaseModel):
@@ -391,10 +400,40 @@ class AgentSpec(BaseModel):
         default_factory=lambda: MiddlewareSpec(**_default_middleware())
     )
     frontend: FrontendSpec = Field(default_factory=FrontendSpec)
-    backend: BackendSpec = Field(default_factory=BackendSpec)
+    ports: PortsSpec = Field(default_factory=PortsSpec)
     observability: ObservabilitySpec = Field(default_factory=ObservabilitySpec)
     deploy: DeploySpec = Field(default_factory=DeploySpec)
     environments: list[str] = Field(default_factory=lambda: ["dev", "prod"])
+
+    @model_validator(mode="before")
+    @classmethod
+    def _migrate_ports(cls, data: object) -> object:
+        """Accept the layout used before `ports` existed, ports living apart.
+
+        old: {frontend: {port: 3001}, backend: {port: 2025}}
+        new: {ports: {frontend: 3001, agent: 2025}}
+
+        A project scaffolded by an earlier version keeps running untouched. An
+        explicit `ports` wins per key, so a file carrying both — one hand-edited,
+        one left over — resolves the way the user last wrote it rather than by
+        section order.
+        """
+        if not isinstance(data, dict):
+            return data
+
+        legacy: dict[str, Any] = {}
+        for section, key in (("frontend", "frontend"), ("backend", "agent")):
+            value = data.get(section)
+            if isinstance(value, dict) and value.get("port") is not None:
+                legacy[key] = value["port"]
+        if not legacy:
+            return data
+
+        ports = data.get("ports")
+        ports = dict(ports) if isinstance(ports, dict) else {}
+        data = dict(data)
+        data["ports"] = {**legacy, **ports}
+        return data
 
     @field_validator("name")
     @classmethod
@@ -419,9 +458,9 @@ class AgentSpec(BaseModel):
             )
         if self.frontend.enabled and self.frontend.kind == "none":
             raise ValueError("frontend.enabled is true but frontend.kind is 'none'")
-        if self.frontend.enabled and self.frontend.port == self.backend.port:
+        if self.frontend.enabled and self.ports.frontend == self.ports.agent:
             raise ValueError(
-                f"frontend.port and backend.port are both {self.frontend.port}; they must differ"
+                f"ports.frontend and ports.agent are both {self.ports.frontend}; they must differ"
             )
         return self
 
@@ -476,7 +515,7 @@ class AgentSpec(BaseModel):
         return self.mode == "proxy"
 
     def local_backend_url(self, port: int | None = None) -> str:
-        return f"http://127.0.0.1:{port or self.backend.port}"
+        return f"http://127.0.0.1:{port or self.ports.agent}"
 
     # ---- langgraph.json -------------------------------------------------
 

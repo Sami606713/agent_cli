@@ -114,7 +114,7 @@ class TestScaffold:
     def test_passthrough_target_defaults_to_the_backend_port(self, tmp_path):
         # agent-chat-ui reads LANGGRAPH_API_URL; langctl pre-fills it so the
         # setup screen never renders.
-        scaffold(AgentSpec(name="demo-agent", backend={"port": 2500}), tmp_path)
+        scaffold(AgentSpec(name="demo-agent", ports={"agent": 2500}), tmp_path)
         env = (tmp_path / "web/.env.example").read_text()
         assert "LANGGRAPH_API_URL=http://127.0.0.1:2500" in env
 
