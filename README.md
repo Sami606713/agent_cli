@@ -95,6 +95,9 @@ langctl new my-agent --yes --memory-backend postgres --semantic-search
 `--backend-only` · `--frontend-only` · `--port` · `--backend-port` · `--no-open` ·
 `--docker` (runs `langgraph up`, port 8123) · `--tunnel` · `--auto-port/--strict-port`
 
+`--port` and `--backend-port` override for one run; [`ports`](#ports) in `agent.yaml`
+changes the defaults for good.
+
 ### `langctl add`
 
 ```bash
@@ -333,8 +336,9 @@ nothing to update later, so redeploying the agent cannot break the UI. This is t
 failure the command exists to prevent; deploying the two halves separately means
 re-wiring them every time.
 
-Only the frontend publishes a port. The Agent Server has no route in from outside, so
-the LangSmith key stays in the server-side proxy exactly as it does in development.
+Only the frontend publishes a port — `ports.frontend` from `agent.yaml`, or `--port` for
+one deploy. The Agent Server has no route in from outside, so the LangSmith key stays in
+the server-side proxy exactly as it does in development.
 
 **First deploy**, in three steps:
 
@@ -391,6 +395,27 @@ Redis with it.
 `agent.yaml` is the single source of truth; `langgraph.json` and the dependency list are
 generated from it. `sync` merges rather than overwrites, so hand-added keys and packages
 survive, and drift is reported instead of silently clobbered.
+
+### Ports
+
+The defaults are 3000 for the chat UI and 2024 for the Agent Server — both of which are
+already taken on plenty of machines. Change them once, in `agent.yaml`:
+
+```yaml
+ports:
+  frontend: 3001
+  agent: 2025
+```
+
+`dev`, `share`, `doctor` and `deploy` all read them. `dev` and `share` pass both to the
+processes they start — `next dev --port` for the UI, `LANGGRAPH_API_URL` for its proxy —
+so a change takes effect on the next run with nothing under `web/` to edit. `--port` and
+`--backend-port` still override for a single run. The two must differ, and `dev` still
+moves off a busy port unless you pass `--strict-port`.
+
+Projects scaffolded before `ports` existed kept these values under `frontend.port` and
+`backend.port`; those files keep loading, and `langctl` migrates them the next time the
+spec is written.
 
 ## Development
 
