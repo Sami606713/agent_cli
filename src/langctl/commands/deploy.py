@@ -203,7 +203,10 @@ def deploy(
         None, "--domain", help="Serve on this domain over HTTPS. Adds Caddy to the stack."
     ),
     port: int = typer.Option(
-        3000, "--port", help="Host port to publish on. Ignored with --domain."
+        None,
+        "--port",
+        help="Host port to publish on. Default: ports.frontend from agent.yaml. "
+        "Ignored with --domain.",
     ),
     build_only: bool = typer.Option(
         False, "--build-only", help="Write the stack and build images; do not start."
@@ -274,6 +277,9 @@ def deploy(
     # A project scaffolded with --no-frontend has no UI to deploy, so it is
     # backend-only whether or not the flag was passed.
     with_frontend = spec.frontend.enabled and not backend_only
+    # The stack publishes the port the project already declares, so a project
+    # that moved off 3000 does not have to say so twice.
+    port = port or spec.ports.frontend
     result = emit(
         spec,
         root,
