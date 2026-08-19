@@ -15,6 +15,7 @@ from .commands.deploy import deploy
 from .commands.dev import dev
 from .commands.doctor import doctor
 from .commands.info import info
+from .commands.init import init
 from .commands.new import new
 from .commands.rollback import rollback
 from .commands.share import share
@@ -32,6 +33,7 @@ cli = typer.Typer(
 )
 
 cli.command("new")(new)
+cli.command("init")(init)
 cli.add_typer(add_app)
 cli.command("dev")(dev)
 cli.command("build")(build)

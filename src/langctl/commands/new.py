@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import re
 import shutil
 import subprocess
 import sys
@@ -21,7 +20,7 @@ from ..core.catalog.models import PROVIDERS, WIZARD_PROVIDERS, is_known, suggest
 from ..core.catalog.models import get as get_provider
 from ..core.errors import LangctlError
 from ..core.generate.scaffold import scaffold
-from ..core.project.spec import AgentSpec
+from ..core.project.spec import AgentSpec, slugify
 from ..core.runtime.executables import find as find_executable
 from ..core.runtime.executables import package_manager
 from ..core.runtime.process import run
@@ -36,11 +35,6 @@ console = Console()
 
 #: One chat UI: LangChain's own agent-chat-ui, vendored unmodified.
 UI_CHOICES = {"agent-chat-ui": "agent_chat_ui"}
-
-
-def slugify(text: str) -> str:
-    slug = re.sub(r"[^a-z0-9-]+", "-", text.lower()).strip("-")
-    return re.sub(r"-{2,}", "-", slug)
 
 
 def _venv_has_langgraph(dest: Path) -> bool:
