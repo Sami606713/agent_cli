@@ -5,12 +5,11 @@ from __future__ import annotations
 import json
 
 import typer
-from ..core.ui.theme import console, CHECK, CROSS, WARN
 
 from ..core.generate.pyproject import dependency_drift, sync_dependencies
 from ..core.generate.scaffold import config_drift, write_langgraph_config
 from ..core.project.manifest import Project
-
+from ..core.ui.theme import CHECK, console
 
 
 def sync(

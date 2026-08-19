@@ -9,7 +9,6 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
-from ..core.ui.theme import console, CHECK, CROSS, WARN
 from rich.table import Table
 
 from ..core.errors import MissingDependency
@@ -18,7 +17,8 @@ from ..core.project.spec import AgentSpec
 from ..core.runtime.health import describe_port_holder, is_port_free
 from ..core.runtime.langgraph_cli import find_langgraph
 from ..core.runtime.process import run
-
+from ..core.ui.theme import CHECK, CROSS, console
+from ..core.ui.theme import WARN as WARN_GLYPH
 
 OK, WARN, FAIL = "ok", "warn", "fail"
 
@@ -322,7 +322,7 @@ def doctor() -> None:
     table.add_column("check")
     table.add_column("detail", overflow="fold")
 
-    glyph = {OK: CHECK, WARN: WARN, FAIL: CROSS}
+    glyph = {OK: CHECK, WARN: WARN_GLYPH, FAIL: CROSS}
     for check in checks:
         table.add_row(glyph[check.status], check.name, check.detail)
     console.print(table)

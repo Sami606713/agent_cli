@@ -13,14 +13,13 @@ from __future__ import annotations
 import subprocess
 
 import typer
-from ..core.ui.theme import console, CHECK, CROSS, WARN
 
 from ..core.errors import LangctlError
 from ..core.generate.scaffold import write_langgraph_config
 from ..core.project.manifest import Project
 from ..core.runtime.executables import package_manager
 from ..core.runtime.langgraph_cli import find_langgraph, validate_command
-
+from ..core.ui.theme import CHECK, console
 
 
 def build(

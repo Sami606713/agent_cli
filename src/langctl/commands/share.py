@@ -15,7 +15,6 @@ import threading
 import time
 
 import typer
-from rich.console import Console
 from rich.panel import Panel
 
 from ..core.errors import LangctlError
@@ -25,7 +24,7 @@ from ..core.runtime.health import find_free_port, is_port_free
 from ..core.runtime.langgraph_cli import dev_command, find_langgraph
 from ..core.runtime.supervisor import ProcessSpec, StartupFailure, Supervisor
 from ..core.runtime.tunnel import PROVIDERS, available, extract_url, resolve
-
+from ..core.ui.theme import console
 
 #: How long to wait for the tunnel client to announce its URL.
 URL_TIMEOUT = 60.0

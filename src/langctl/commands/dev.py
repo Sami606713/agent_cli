@@ -6,7 +6,6 @@ import webbrowser
 from urllib.parse import quote
 
 import typer
-from ..core.ui.theme import console, CHECK, CROSS, WARN
 from rich.panel import Panel
 from rich.table import Table
 
@@ -17,7 +16,7 @@ from ..core.runtime.executables import find as find_executable
 from ..core.runtime.health import describe_port_holder, find_free_port, is_port_free
 from ..core.runtime.langgraph_cli import dev_command, find_langgraph, up_command
 from ..core.runtime.supervisor import ProcessSpec, StartupFailure, Supervisor
-
+from ..core.ui.theme import WARN, console
 
 #: `langgraph up` (Docker) serves on 8123; `langgraph dev` on 2024.
 DOCKER_PORT = 8123

@@ -4,12 +4,11 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from ..core.ui.theme import console
 from rich.table import Table
 
 from ..core.deploy.version import current_tag, deploy_history
 from ..core.project.manifest import Project
-
+from ..core.ui.theme import console
 
 
 def _human(at: str) -> str:

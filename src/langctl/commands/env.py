@@ -12,14 +12,13 @@ missing — it holds real secrets, `.env.example` does not.
 from __future__ import annotations
 
 import typer
-from ..core.ui.theme import console, CHECK, CROSS, WARN
 from rich.table import Table
 
 from ..core.generate.deps import required_env_vars
 from ..core.generate.render import plan_layers
 from ..core.generate.scaffold import backend_template, render_context
 from ..core.project.manifest import Project
-
+from ..core.ui.theme import CHECK, console
 
 app = typer.Typer(name="env", help="Inspect and regenerate required environment variables.")
 

@@ -7,13 +7,12 @@ opening the YAML — the same question `shopify app info` answers for an app.
 
 from __future__ import annotations
 
-from ..core.ui.theme import console, WARN
 from rich.table import Table
 
 from ..core.deploy import catalog
 from ..core.project.manifest import Project
 from ..core.runtime.health import is_port_free
-
+from ..core.ui.theme import console
 
 
 def _row(table: Table, label: str, value: str) -> None:

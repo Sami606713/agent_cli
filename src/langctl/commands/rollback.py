@@ -12,7 +12,6 @@ import subprocess
 from pathlib import Path
 
 import typer
-from rich.console import Console
 from rich.panel import Panel
 
 from ..core.deploy.targets import Remote, compose_restart, over_ssh, parse_remote
@@ -26,7 +25,7 @@ from ..core.deploy.version import (
 from ..core.errors import LangctlError
 from ..core.project.manifest import Project
 from ..core.runtime.executables import require
-
+from ..core.ui.theme import console
 
 
 def _run(argv: list[str], cwd: Path, what: str) -> None:

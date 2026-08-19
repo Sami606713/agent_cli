@@ -9,7 +9,6 @@ a file you have edited is skipped and reported, never rewritten.
 from __future__ import annotations
 
 import typer
-from ..core.ui.theme import console, CHECK, CROSS, WARN
 from rich.panel import Panel
 
 from ..core.catalog.middleware import REGISTRY, conflicts_in, missing_config, ordered
@@ -33,8 +32,8 @@ from ..core.generate.scaffold import (
 from ..core.project.manifest import Project
 from ..core.project.spec import AgentSpec
 from ..core.project.spec_edit import merge_section, register_tool
+from ..core.ui.theme import WARN, console
 from ..core.wizard.memory import MEMORY_BACKENDS, ask_memory, memory_from_flags
-
 
 app = typer.Typer(
     name="add",

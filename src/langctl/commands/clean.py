@@ -17,11 +17,10 @@ import sys
 import time
 
 import typer
-from ..core.ui.theme import console, CHECK, CROSS, WARN
 
 from ..core.project.manifest import Project
 from ..core.runtime.health import PortHolder, find_port_holder, is_port_free
-
+from ..core.ui.theme import CHECK, WARN, console
 
 #: Checked when no project is found, or a project does not set one of these.
 DEFAULT_BACKEND_PORT = 2024

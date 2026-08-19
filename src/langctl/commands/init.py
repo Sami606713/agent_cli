@@ -14,7 +14,6 @@ from __future__ import annotations
 from pathlib import Path
 
 import typer
-from ..core.ui.theme import console, CHECK, CROSS, WARN
 from rich.panel import Panel
 from rich.prompt import Prompt
 
@@ -22,7 +21,7 @@ from ..core.catalog.models import WIZARD_PROVIDERS, is_known
 from ..core.catalog.models import get as get_provider
 from ..core.errors import LangctlError
 from ..core.project.adopt import Findings, ProjectAdopter
-
+from ..core.ui.theme import console
 
 
 def init(

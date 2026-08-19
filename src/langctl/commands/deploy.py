@@ -20,7 +20,6 @@ import subprocess
 from pathlib import Path
 
 import typer
-from ..core.ui.theme import console, CHECK, CROSS, WARN
 from rich.panel import Panel
 from rich.prompt import Prompt
 from rich.table import Table
@@ -53,7 +52,7 @@ from ..core.project.manifest import Project
 from ..core.project.spec_edit import merge_section
 from ..core.runtime.executables import require
 from ..core.runtime.langgraph_cli import find_langgraph
-
+from ..core.ui.theme import CHECK, WARN, console
 
 
 def _run(argv: list[str], cwd: Path, what: str) -> None:

@@ -25,7 +25,7 @@ from ..core.runtime.executables import package_manager
 from ..core.runtime.process import run
 from ..core.ui import banner
 from ..core.ui.prompt import ask, confirm, select
-from ..core.ui.theme import console, CHECK, CROSS, WARN
+from ..core.ui.theme import CHECK, CROSS, WARN, console
 from ..core.wizard.memory import (
     EMBEDDING_MODES,
     MEMORY_BACKENDS,

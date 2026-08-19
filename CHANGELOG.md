@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.17.4] - 2026-08-19
+
+### Fixed
+
+- Release CI for 0.17.3 failed `ruff check`: first-party theme imports sat
+  above third-party `rich` imports, unused `CHECK`/`CROSS`/`WARN` names
+  lingered after the UI pass, and `rollback`/`share` still called `console`
+  after dropping their local `Console()` without importing the shared one.
+  `doctor` aliases the theme `WARN` glyph so it does not collide with the
+  check-status constant of the same name.
+
 ## [0.17.3] - 2026-08-19
 
 ### Changed
