@@ -35,7 +35,6 @@ from ..core.project.spec import AgentSpec
 from ..core.project.spec_edit import merge_section, register_tool
 from ..core.wizard.memory import MEMORY_BACKENDS, ask_memory, memory_from_flags
 
-console = Console()
 
 app = typer.Typer(
     name="add",

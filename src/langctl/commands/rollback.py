@@ -27,7 +27,6 @@ from ..core.errors import LangctlError
 from ..core.project.manifest import Project
 from ..core.runtime.executables import require
 
-console = Console()
 
 
 def _run(argv: list[str], cwd: Path, what: str) -> None:

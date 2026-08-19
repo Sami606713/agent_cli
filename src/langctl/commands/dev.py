@@ -18,7 +18,6 @@ from ..core.runtime.health import describe_port_holder, find_free_port, is_port_
 from ..core.runtime.langgraph_cli import dev_command, find_langgraph, up_command
 from ..core.runtime.supervisor import ProcessSpec, StartupFailure, Supervisor
 
-console = Console()
 
 #: `langgraph up` (Docker) serves on 8123; `langgraph dev` on 2024.
 DOCKER_PORT = 8123

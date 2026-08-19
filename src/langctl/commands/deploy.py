@@ -54,7 +54,6 @@ from ..core.project.spec_edit import merge_section
 from ..core.runtime.executables import require
 from ..core.runtime.langgraph_cli import find_langgraph
 
-console = Console()
 
 
 def _run(argv: list[str], cwd: Path, what: str) -> None:

@@ -21,7 +21,6 @@ from ..core.project.manifest import Project
 from ..core.runtime.executables import package_manager
 from ..core.runtime.langgraph_cli import find_langgraph, validate_command
 
-console = Console()
 
 
 def build(

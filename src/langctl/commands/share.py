@@ -26,7 +26,6 @@ from ..core.runtime.langgraph_cli import dev_command, find_langgraph
 from ..core.runtime.supervisor import ProcessSpec, StartupFailure, Supervisor
 from ..core.runtime.tunnel import PROVIDERS, available, extract_url, resolve
 
-console = Console()
 
 #: How long to wait for the tunnel client to announce its URL.
 URL_TIMEOUT = 60.0

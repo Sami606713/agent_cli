@@ -23,7 +23,6 @@ from ..core.catalog.models import get as get_provider
 from ..core.errors import LangctlError
 from ..core.project.adopt import Findings, ProjectAdopter
 
-console = Console()
 
 
 def init(

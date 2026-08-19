@@ -19,7 +19,6 @@ from ..core.runtime.health import describe_port_holder, is_port_free
 from ..core.runtime.langgraph_cli import find_langgraph
 from ..core.runtime.process import run
 
-console = Console()
 
 OK, WARN, FAIL = "ok", "warn", "fail"
 
