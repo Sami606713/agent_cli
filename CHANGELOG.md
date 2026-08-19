@@ -7,6 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.16.0] - 2026-08-19
+
+### Added
+
+- **`langctl clean`** — reclaims ports an orphaned `dev` session left behind.
+  Only ever offers to kill a process it recognises by name (`langgraph`,
+  `node`, `next-server`); anything else on the port is reported and left
+  alone.
+- **`langctl build`** — a fast "does this compile" gate ahead of
+  `deploy --build-only`: validates `langgraph.json` and runs the frontend's
+  real `next build`. No Docker, no deployment.
+- **`langctl info`** — a formatted read of `agent.yaml`: model, memory,
+  frontend, middleware, deploy target, and live port status.
+- **`langctl versions`** — every deploy recorded for this project, newest
+  first, with the current one marked.
+- **`langctl rollback <tag>`** — retags a previous deploy's images onto
+  `:latest` and restarts. No rebuild: the images already exist on disk under
+  their own tag from when they were first deployed.
+
+  Every successful `deploy` now tags its images twice — `:latest`, which the
+  stack runs, and `:<commit-sha>` (`-dirty` suffixed when the working tree
+  has uncommitted changes, so a tag can never falsely imply that checking out
+  that commit reproduces what shipped). Versioning could not live inside
+  `docker-compose.yml` itself: `deploy` never rewrites a stack file that
+  already exists, so a tag baked into the template would freeze after the
+  first deploy.
+
 ## [0.15.0] - 2026-08-17
 
 ### Changed
