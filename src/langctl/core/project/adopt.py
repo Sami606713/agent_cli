@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import json
 import re
+import tomllib
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -106,6 +107,24 @@ class ProjectAdopter:
 
         return findings
 
+    def _pyproject_data(self) -> dict:
+        """Parsed `[project]` table, or `{}` for anything that does not parse.
+
+        Real TOML parsing rather than `generate.pyproject`'s regex: that regex
+        is scoped to the multi-line array langctl's own templates produce
+        (`dependencies = [\\n    "x",\\n]`) and never matches a hand-written
+        single-line `dependencies = ["x"]` — exactly the shape a project this
+        class adopts is likely to use. Caught live: a real hand-built project
+        with `langchain-openai` installed still came back with "could not
+        infer a model provider" because the regex found nothing to match.
+        """
+        if not self.pyproject_text:
+            return {}
+        try:
+            return tomllib.loads(self.pyproject_text).get("project", {})
+        except tomllib.TOMLDecodeError:
+            return {}
+
     def _infer_name(self) -> tuple[str, str]:
         """A name `AgentSpec` will accept, from whatever source supplied it.
 
@@ -115,10 +134,9 @@ class ProjectAdopter:
         than handed to `AgentSpec` raw, which would surface as a bare pydantic
         `ValidationError` instead of an adoption that just works.
         """
-        if self.pyproject_text:
-            match = re.search(r'(?m)^name\s*=\s*"([^"]+)"', self.pyproject_text)
-            if match:
-                return slugify(match.group(1)), "pyproject.toml"
+        name = self._pyproject_data().get("name")
+        if isinstance(name, str) and name:
+            return slugify(name), "pyproject.toml"
         return slugify(self.root.name), "directory name"
 
     def _infer_provider(self) -> tuple[str, str] | None:
@@ -128,13 +146,14 @@ class ProjectAdopter:
         package (`azure_openai` and `openai` both install `langchain-openai`),
         so this is a starting guess for the caller to confirm, not a fact.
         """
-        if not self.pyproject_text:
+        dependencies = self._pyproject_data().get("dependencies")
+        if not isinstance(dependencies, list):
             return None
-        from ..generate.pyproject import current_dependencies
 
         installed = {
             re.split(r"[<>=\[]", dep, maxsplit=1)[0].strip()
-            for dep in current_dependencies(self.pyproject_text) or []
+            for dep in dependencies
+            if isinstance(dep, str)
         }
         for key, provider in PROVIDERS.items():
             if provider.package and provider.package.split(">")[0].split("[")[0] in installed:

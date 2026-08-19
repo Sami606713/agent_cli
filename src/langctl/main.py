@@ -14,6 +14,7 @@ from .commands.clean import clean
 from .commands.deploy import deploy
 from .commands.dev import dev
 from .commands.doctor import doctor
+from .commands.env import app as env_app
 from .commands.info import info
 from .commands.init import init
 from .commands.new import new
@@ -35,6 +36,7 @@ cli = typer.Typer(
 cli.command("new")(new)
 cli.command("init")(init)
 cli.add_typer(add_app)
+cli.add_typer(env_app)
 cli.command("dev")(dev)
 cli.command("build")(build)
 cli.command("deploy")(deploy)

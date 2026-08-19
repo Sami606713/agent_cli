@@ -119,6 +119,31 @@ class TestProjectAdopter:
         findings = adopter.infer()
         assert findings.provider is None
 
+    def test_infer_matches_a_provider_in_a_single_line_dependency_array(self, tmp_path):
+        """Caught live: `handmade()`'s fixture always wrote a multi-line
+        array, which happened to be the one shape the old regex-based parser
+        matched — so this exact case shipped untested. A hand-written
+        `pyproject.toml` is just as likely to write `dependencies = [...]` on
+        one line, and that came back "could not infer a model provider" for a
+        project that plainly declared `langchain-openai`."""
+        (tmp_path / "pyproject.toml").write_text(
+            '[project]\nname = "single-line"\n'
+            'dependencies = ["langgraph>=1.0", "langchain-openai>=1.0"]\n',
+            encoding="utf-8",
+        )
+        adopter = ProjectAdopter(tmp_path)
+        adopter.detect()
+        findings = adopter.infer()
+        assert findings.provider == "openai"
+
+    def test_infer_tolerates_pyproject_toml_that_does_not_parse(self, tmp_path):
+        (tmp_path / "pyproject.toml").write_text("not [ valid toml", encoding="utf-8")
+        adopter = ProjectAdopter(tmp_path)
+        adopter.detect()
+        findings = adopter.infer()  # must not raise
+        assert findings.provider is None
+        assert findings.name == slugify(tmp_path.name)
+
     def test_build_spec_disables_long_term_memory(self, tmp_path):
         # AgentSpec defaults memory on; adoption must not inherit that, since
         # nothing here writes the memory/store.py the config would reference.
