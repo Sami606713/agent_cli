@@ -7,6 +7,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.17.0] - 2026-08-19
+
+### Added
+
+- **`langctl init`** — adopt an existing LangGraph project. `new` in reverse:
+  infers a spec from a project that already exists instead of generating one
+  from nothing, and writes exactly one file, `agent.yaml`. Every other langctl
+  command becomes available; no source file moves. Warns rather than silently
+  proceeding when the graph's file path does not match `./src/<pkg>/agent.py`,
+  since `sync`/`dev`/`deploy` always rewrite `langgraph.json`'s `graphs` key to
+  that path.
+
+- **`langctl env show`** / **`langctl env pull`** — required environment
+  variables, and whether `.env` sets each one. `pull` regenerates
+  `.env.example` from the current `agent.yaml`; `.env` itself is only ever
+  created once and never overwritten. The direct fix for `init` leaving an
+  adopted project with no `.env.example` at all.
+
+- **`langctl clean`** — reclaims ports an orphaned `dev` session left behind,
+  only ever killing a process it recognises by name.
+- **`langctl build`** — validates `langgraph.json` and builds the frontend, no
+  Docker, ahead of `deploy --build-only`.
+- **`langctl info`** — a formatted read of `agent.yaml`: model, memory,
+  frontend, middleware, deploy target, live port status.
+- **`langctl versions`** / **`langctl rollback <tag>`** — every deploy this
+  project has shipped, and a way back to one without a rebuild. Every
+  successful `deploy` now tags its images by commit as well as `:latest`.
+
+### Fixed
+
+- `init` inferred no model provider for a hand-written `pyproject.toml`
+  declaring a single-line `dependencies = [...]` array — the dependency parser
+  it reused only matched the multi-line array langctl's own templates produce.
+  Replaced with a real `tomllib` parse.
+
 ## [0.16.0] - 2026-08-19
 
 ### Added
