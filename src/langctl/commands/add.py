@@ -9,7 +9,7 @@ a file you have edited is skipped and reported, never rewritten.
 from __future__ import annotations
 
 import typer
-from rich.console import Console
+from ..core.ui.theme import console, CHECK, CROSS, WARN
 from rich.panel import Panel
 
 from ..core.catalog.middleware import REGISTRY, conflicts_in, missing_config, ordered
@@ -72,7 +72,7 @@ def _warn_shadowed_modules(project: Project) -> None:
         return
 
     console.print(
-        "\n[yellow]![/yellow] These files are now shadowed by a package of the "
+        "\n{WARN} These files are now shadowed by a package of the "
         "same name and will never be imported:"
     )
     for module in shadowed:
@@ -110,7 +110,7 @@ def add_memory(
     if spec.memory.long_term.enabled and not (yes or backend or semantic_search is not None):
         current = spec.memory.long_term
         console.print(
-            f"[yellow]![/yellow] Long-term memory is already enabled "
+            f"{WARN} Long-term memory is already enabled "
             f"({current.backend}"
             f"{', semantic search on' if current.semantic_search else ''})."
         )
@@ -173,7 +173,7 @@ def add_frontend(
 
     spec = project.spec
     if spec.frontend.enabled and project.frontend_dir.is_dir():
-        console.print(f"[yellow]![/yellow] A frontend already exists ({spec.frontend.kind}).")
+        console.print(f"{WARN} A frontend already exists ({spec.frontend.kind}).")
         if not typer.confirm("Add the new one alongside it?", default=False):
             raise typer.Exit()
 
@@ -234,7 +234,7 @@ def add_tool(
         # The registry has been restructured; splicing blindly would be worse
         # than telling the user exactly what to add.
         console.print(
-            "  [yellow]![/yellow] could not auto-register — add these to tools/__init__.py:"
+            "  {WARN} could not auto-register — add these to tools/__init__.py:"
         )
         console.print(
             f"      [cyan]from {project.spec.package_name}.tools.{module} import {symbol}[/cyan]"
@@ -287,7 +287,7 @@ def add_middleware(
 
     block = spec.middleware.model_dump()
     if block.get(name, {}).get("enabled"):
-        console.print(f"[yellow]![/yellow] {name} is already enabled.")
+        console.print(f"{WARN} {name} is already enabled.")
         raise typer.Exit()
 
     settings = {"enabled": True, **mw.defaults}
@@ -309,7 +309,7 @@ def add_middleware(
         [k for k, v in block.items() if isinstance(v, dict) and v.get("enabled")]
     ):
         console.print(
-            f"  [yellow]![/yellow] {a} and {b} overlap in purpose; "
+            f"  {WARN} {a} and {b} overlap in purpose; "
             "enabling both may produce surprising behaviour."
         )
 

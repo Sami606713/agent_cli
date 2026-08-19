@@ -12,7 +12,7 @@ missing — it holds real secrets, `.env.example` does not.
 from __future__ import annotations
 
 import typer
-from rich.console import Console
+from ..core.ui.theme import console, CHECK, CROSS, WARN
 from rich.table import Table
 
 from ..core.generate.deps import required_env_vars
@@ -20,7 +20,6 @@ from ..core.generate.render import plan_layers
 from ..core.generate.scaffold import backend_template, render_context
 from ..core.project.manifest import Project
 
-console = Console()
 
 app = typer.Typer(name="env", help="Inspect and regenerate required environment variables.")
 
@@ -72,7 +71,7 @@ def show() -> None:
             f"{'them' if len(missing) > 1 else 'it'} to .env[/dim]"
         )
     else:
-        console.print("\n[green]✓[/green] everything required is set")
+        console.print("\n{CHECK} everything required is set")
 
 
 @app.command("pull")
@@ -94,11 +93,11 @@ def pull() -> None:
 
     example_path.parent.mkdir(parents=True, exist_ok=True)
     example_path.write_text(planned[example_path], encoding="utf-8")
-    console.print(f"[green]✓[/green] wrote {example_path.relative_to(project.root)}")
+    console.print(f"{CHECK} wrote {example_path.relative_to(project.root)}")
 
     if not project.env_file.is_file():
         project.env_file.write_text(planned[example_path], encoding="utf-8")
-        console.print(f"[green]✓[/green] created {project.env_file.name} — fill it in")
+        console.print(f"{CHECK} created {project.env_file.name} — fill it in")
     else:
         console.print(
             "[dim].env already exists and was not touched — "

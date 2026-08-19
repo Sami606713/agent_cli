@@ -11,11 +11,10 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 import typer
-from rich.console import Console
 from rich.markup import escape
 from rich.panel import Panel
-from rich.prompt import Confirm, Prompt
 
+from .. import __version__
 from ..core.catalog.models import PROVIDERS, WIZARD_PROVIDERS, is_known, suggest
 from ..core.catalog.models import get as get_provider
 from ..core.errors import LangctlError
@@ -24,14 +23,15 @@ from ..core.project.spec import AgentSpec, slugify
 from ..core.runtime.executables import find as find_executable
 from ..core.runtime.executables import package_manager
 from ..core.runtime.process import run
+from ..core.ui import banner
+from ..core.ui.prompt import ask, confirm, select
+from ..core.ui.theme import console, CHECK, CROSS, WARN
 from ..core.wizard.memory import (
     EMBEDDING_MODES,
     MEMORY_BACKENDS,
     ask_memory,
     memory_from_flags,
 )
-
-console = Console()
 
 #: One chat UI: LangChain's own agent-chat-ui, vendored unmodified.
 UI_CHOICES = {"agent-chat-ui": "agent_chat_ui"}
@@ -65,13 +65,13 @@ class InstallReport:
         self.lines.append(f"[green]✓[/green] {message}")
 
     def warn(self, message: str, command: str, hint: str | None = None) -> None:
-        self.lines.append(f"[yellow]![/yellow] {message}")
+        self.lines.append(f"{WARN} {message}")
         if hint:
             self.lines.append(f"[dim]  {hint}[/dim]")
         self.todo.append(command)
 
     def failed(self, message: str, stderr: str, command: str) -> None:
-        self.lines.append(f"[red]✗[/red] {message}")
+        self.lines.append(f"{CROSS} {message}")
         self.lines.append(f"[dim]{escape(stderr.strip()[-600:])}[/dim]")
         self.todo.append(command)
 
@@ -200,19 +200,22 @@ def new(
     git: bool = typer.Option(True, "--git/--no-git"),
 ) -> None:
     """Create a new agent project."""
+    # A banner belongs to the moment someone is starting something and
+    # watching — not to a scripted `--yes` run, even in a real terminal.
+    if not yes:
+        banner.show(__version__)
+
     if name is None:
         if yes:
             raise LangctlError("A project name is required with --yes", fix="langctl new my-agent")
-        name = Prompt.ask("Project name", default="my-agent")
+        name = ask("Project name", default="my-agent")
     name = slugify(name)
 
     if runtime is None:
-        runtime = (
-            "python" if yes else Prompt.ask("Runtime", choices=["python", "node"], default="python")
-        )
+        runtime = "python" if yes else select("Runtime", ["python", "node"], default="python")
 
     if frontend is None:
-        frontend = True if yes else Confirm.ask("Include a chat frontend?", default=True)
+        frontend = True if yes else confirm("Include a chat frontend?", default=True)
 
     if frontend:
         # Only one UI, so nothing is asked; the flag stays for scripts that
@@ -230,13 +233,9 @@ def new(
         model_provider = (
             "anthropic"
             if yes
-            else Prompt.ask(
-                "Model provider",
-                # A prompt listing 25 providers is unusable; the rest stay
-                # reachable through --model-provider.
-                choices=list(WIZARD_PROVIDERS),
-                default="anthropic",
-            )
+            # A prompt listing 25 providers is unusable; the rest stay
+            # reachable through --model-provider.
+            else select("Model provider", list(WIZARD_PROVIDERS), default="anthropic")
         )
     if not is_known(model_provider) and not model_package:
         hint = suggest(model_provider)
@@ -263,7 +262,7 @@ def new(
                 "\n[dim]ollama serves models you have pulled locally — "
                 "run `ollama list` to see them.[/dim]"
             )
-        model_name = Prompt.ask(f"Model name for {model_provider}").strip()
+        model_name = ask(f"Model name for {model_provider}").strip()
         if not model_name:
             raise LangctlError(
                 f"A model name is required for {model_provider}",
@@ -326,12 +325,12 @@ def new(
     dest.mkdir(parents=True, exist_ok=True)
 
     written = scaffold(spec, dest)
-    console.print(f"[green]✓[/green] created {len(written)} files in [bold]{dest}[/bold]")
+    console.print(f"{CHECK} created {len(written)} files in [bold]{dest}[/bold]")
 
     env_example = dest / ".env.example"
     if env_example.is_file() and not (dest / ".env").exists():
         shutil.copyfile(env_example, dest / ".env")
-        console.print("[green]✓[/green] created .env from .env.example")
+        console.print("{CHECK} created .env from .env.example")
 
     git_exe = find_executable("git")
     if git and git_exe and not (dest / ".git").exists():

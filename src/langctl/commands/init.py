@@ -14,7 +14,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import typer
-from rich.console import Console
+from ..core.ui.theme import console, CHECK, CROSS, WARN
 from rich.panel import Panel
 from rich.prompt import Prompt
 
@@ -77,9 +77,9 @@ def _report(adopter: ProjectAdopter, findings: Findings) -> None:
     console.print(f"  [green]✓[/green] name: {findings.name} [dim]({findings.name_source})[/dim]")
 
     if not adopter.found_langgraph_config:
-        console.print("  [yellow]![/yellow] no langgraph.json found")
+        console.print("  {WARN} no langgraph.json found")
     elif findings.graph_id:
-        marker = "[green]✓[/green]" if findings.graph_path_is_conventional else "[yellow]![/yellow]"
+        marker = "[green]✓[/green]" if findings.graph_path_is_conventional else "{WARN}"
         console.print(f"  {marker} graph: {findings.graph_id} → {findings.graph_target}")
         if not findings.graph_path_is_conventional:
             console.print(
@@ -96,7 +96,7 @@ def _report(adopter: ProjectAdopter, findings: Findings) -> None:
             f"[dim](from {findings.provider_source} in pyproject.toml)[/dim]"
         )
     else:
-        console.print("  [yellow]![/yellow] could not infer a model provider")
+        console.print("  {WARN} could not infer a model provider")
     console.print()
 
 

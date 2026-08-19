@@ -13,7 +13,7 @@ from __future__ import annotations
 import subprocess
 
 import typer
-from rich.console import Console
+from ..core.ui.theme import console, CHECK, CROSS, WARN
 
 from ..core.errors import LangctlError
 from ..core.generate.scaffold import write_langgraph_config
@@ -43,7 +43,7 @@ def build(
             "langgraph.json is not valid",
             fix="The output above has the details. Try `langctl sync` first.",
         )
-    console.print("  [green]✓[/green] langgraph.json valid, graph imports")
+    console.print(f"  {CHECK} langgraph.json valid, graph imports")
 
     if skip_frontend or not spec.frontend.enabled:
         return
@@ -69,4 +69,4 @@ def build(
             "the frontend build failed",
             fix="The output above has the details.",
         )
-    console.print("  [green]✓[/green] next build succeeded")
+    console.print(f"  {CHECK} next build succeeded")

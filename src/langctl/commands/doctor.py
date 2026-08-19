@@ -9,7 +9,7 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
-from rich.console import Console
+from ..core.ui.theme import console, CHECK, CROSS, WARN
 from rich.table import Table
 
 from ..core.errors import MissingDependency
@@ -323,7 +323,7 @@ def doctor() -> None:
     table.add_column("check")
     table.add_column("detail", overflow="fold")
 
-    glyph = {OK: "[green]✓[/green]", WARN: "[yellow]![/yellow]", FAIL: "[red]✗[/red]"}
+    glyph = {OK: CHECK, WARN: WARN, FAIL: CROSS}
     for check in checks:
         table.add_row(glyph[check.status], check.name, check.detail)
     console.print(table)

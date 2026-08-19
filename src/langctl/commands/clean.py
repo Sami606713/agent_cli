@@ -17,7 +17,7 @@ import sys
 import time
 
 import typer
-from rich.console import Console
+from ..core.ui.theme import console, CHECK, CROSS, WARN
 
 from ..core.project.manifest import Project
 from ..core.runtime.health import PortHolder, find_port_holder, is_port_free
@@ -69,14 +69,14 @@ def clean(
 
         if holder is None:
             console.print(
-                f"[yellow]![/yellow] port {port_number} ({role}) is busy, but "
+                f"{WARN} port {port_number} ({role}) is busy, but "
                 "langctl cannot tell by what — nothing to do here"
             )
             continue
 
         if not _looks_like_ours(holder):
             console.print(
-                f"[yellow]![/yellow] port {port_number} ({role}) is held by "
+                f"{WARN} port {port_number} ({role}) is held by "
                 f"[bold]{holder.name}[/bold] (pid {holder.pid}) — not a langctl "
                 "process, leaving it alone"
             )
@@ -89,15 +89,15 @@ def clean(
         if yes or typer.confirm(f"  Kill pid {holder.pid}?", default=False):
             _kill(holder.pid)
             if is_port_free(port_number):
-                console.print(f"  [green]✓[/green] port {port_number} is free")
+                console.print(f"  {CHECK} port {port_number} is free")
             else:
                 console.print(
-                    f"  [yellow]![/yellow] pid {holder.pid} did not exit in time; "
+                    f"  {WARN} pid {holder.pid} did not exit in time; "
                     f"try again or kill it yourself"
                 )
 
     if not found_any:
-        console.print("[green]✓[/green] nothing to clean — every checked port is free")
+        console.print("{CHECK} nothing to clean — every checked port is free")
 
 
 def _kill(pid: int) -> None:
@@ -117,4 +117,4 @@ def _kill(pid: int) -> None:
     except ProcessLookupError:
         pass  # already gone
     except PermissionError:
-        console.print(f"  [yellow]![/yellow] no permission to kill pid {pid}")
+        console.print(f"  {WARN} no permission to kill pid {pid}")

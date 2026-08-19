@@ -6,7 +6,7 @@ import webbrowser
 from urllib.parse import quote
 
 import typer
-from rich.console import Console
+from ..core.ui.theme import console, CHECK, CROSS, WARN
 from rich.panel import Panel
 from rich.table import Table
 
@@ -30,7 +30,7 @@ def _resolve_port(preferred: int, role: str, auto: bool) -> int:
     if not auto:
         raise PortInUse(preferred, role, describe_port_holder(preferred))
     chosen = find_free_port(preferred + 1)
-    console.print(f"[yellow]![/yellow] port {preferred} ({role}) is busy — using {chosen} instead")
+    console.print(f"{WARN} port {preferred} ({role}) is busy — using {chosen} instead")
     return chosen
 
 
