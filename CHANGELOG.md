@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.17.3] - 2026-08-19
+
+### Changed
+
+- **The CLI has one look now.** Every command used to instantiate its own
+  `Console()`, so checkmarks, colors and spacing drifted command to command.
+  There is one shared console, one palette, and one set of symbols
+  (`✓` / `✗` / `!` / `◆`) imported from `langctl.core.ui`.
+
+- **`langctl new` and `langctl dev` open with a wordmark.** A figlet banner
+  plus the version, shown only in an interactive terminal — `doctor`, `info`
+  and the rest stay quiet because those are consulted mid-task, not launched.
+  This adds a `pyfiglet` runtime dependency.
+
+- **Wizards use a single prompt style.** `ask` / `confirm` / `select` wrap
+  Rich's own prompts so arrow keys and Ctrl-C stay correct; only the
+  diamond-bullet surface is new. Longer choice lists (providers, deploy
+  targets) print on their own lines instead of wrapping inside parentheses.
+
 ## [0.17.0] - 2026-08-19
 
 ### Added
