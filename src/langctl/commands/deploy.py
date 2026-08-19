@@ -44,6 +44,7 @@ from ..core.deploy.targets import (
     rsync_project,
     write_agent_dockerfile,
 )
+from ..core.deploy.version import deploy_tag, record_deploy, tag_image
 from ..core.errors import LangctlError
 from ..core.generate.pyproject import sync_dependencies
 from ..core.generate.regenerate import apply_spec_change
@@ -376,6 +377,15 @@ def deploy(
         console.print("\n[bold]start[/bold]")
         _run(compose_up(docker), root, "docker compose up")
         url = f"https://{domain}" if domain else f"http://localhost:{port}"
+
+    # ---- tag this deploy, so it can be listed and rolled back to ---------
+    tag = deploy_tag(root)
+    images = [f"{spec.name}-agent", *([f"{spec.name}-web"] if with_frontend else [])]
+    for image in images:
+        argv = tag_image(docker, image, tag)
+        _run(over_ssh(remote, argv) if remote else argv, root, f"docker tag ({image})")
+    record_deploy(project, tag, images)
+    console.print(f"[dim]tagged as {tag}[/dim]")
 
     suffix = f" --host {remote.destination}" if remote else ""
     reach = (

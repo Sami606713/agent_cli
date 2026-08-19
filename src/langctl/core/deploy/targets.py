@@ -121,6 +121,16 @@ def compose_up(docker: str) -> list[str]:
     return compose(docker, "up", "-d", "--build", "--wait")
 
 
+def compose_restart(docker: str) -> list[str]:
+    """`up` without `--build` — starts whatever `:latest` already points at.
+
+    `rollback` retags an old image onto `:latest` first; `--build` here would
+    immediately rebuild from source and overwrite that retag before the
+    container ever started.
+    """
+    return compose(docker, "up", "-d", "--wait")
+
+
 def compose_down(docker: str, volumes: bool = False) -> list[str]:
     return compose(docker, "down", *(["--volumes"] if volumes else []))
 
