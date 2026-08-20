@@ -293,9 +293,9 @@ def _project_checks() -> list[Check]:
     if memory_check:
         checks.append(memory_check)
 
-    checks.append(_port(spec.backend.port, "agent"))
+    checks.append(_port(spec.ports.agent, "agent"))
     if spec.frontend.enabled:
-        checks.append(_port(spec.frontend.port, "web"))
+        checks.append(_port(spec.ports.frontend, "web"))
     return checks
 
 

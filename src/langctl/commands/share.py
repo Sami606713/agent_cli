@@ -68,10 +68,10 @@ def share(
 
     write_langgraph_config(spec, project.langgraph_config_path)
 
-    api_port = backend_port or spec.backend.port
+    api_port = backend_port or spec.ports.agent
     if not is_port_free(api_port):
         api_port = find_free_port(api_port + 1)
-    web_port = port or spec.frontend.port
+    web_port = port or spec.ports.frontend
     if has_frontend and not is_port_free(web_port):
         web_port = find_free_port(web_port + 1)
 

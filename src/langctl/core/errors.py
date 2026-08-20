@@ -60,8 +60,10 @@ class PortInUse(LangctlError):
         super().__init__(
             f"Port {port} ({role}) is already in use",
             fix=(
-                f"Stop whatever is using it, or pass "
-                f"`--{'backend-port' if role == 'agent' else 'port'} <other>`."
+                "Stop whatever is using it, pass "
+                f"`--{'backend-port' if role == 'agent' else 'port'} <other>`, "
+                f"or set `ports.{'agent' if role == 'agent' else 'frontend'}` "
+                "in agent.yaml to change it for good."
             ),
             detail=detail,
         )

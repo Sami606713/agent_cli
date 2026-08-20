@@ -7,6 +7,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Both local ports are configurable in `agent.yaml`.** 3000 and 2024 are the
+  defaults, and both are already taken on plenty of machines — 3000 by every
+  other Next.js app, 2024 by any other Agent Server. `--port` and
+  `--backend-port` fixed one run; the only way to change the default was to edit
+  generated source.
+
+  ```yaml
+  ports:
+    frontend: 3001
+    agent: 2025
+  ```
+
+  `dev`, `share`, `doctor` and `deploy` all read it. The two ports must differ
+  when a frontend is enabled, and each is range-checked (1–65535) at load, so a
+  typo is reported by `agent.yaml` rather than by a socket error three commands
+  later. `--port` and `--backend-port` still win for a single run, and `dev`
+  still steps to the next free port unless `--strict-port` says otherwise.
+
+  `langctl deploy --port` now defaults to `ports.frontend` instead of a
+  hardcoded 3000, so a project that moved off 3000 does not have to say so twice.
+  `PortInUse` names the `ports` key alongside the flag, because the flag fixes
+  the run and the key fixes the project.
+
+### Changed
+
+- **The two ports moved into one `ports` section.** They were `frontend.port`
+  and `backend.port` — a layout in which the agent's port lived under a
+  `backend:` section that held nothing else, and which read as two unrelated
+  settings rather than one decision. The keys are now named for the roles
+  `langctl dev` prints: `frontend` and `agent`.
+
+  Existing projects keep working and keep their ports: the old sections are
+  still accepted and migrated on load, and the new layout is written the next
+  time the spec is saved. A file carrying both wins per key from `ports`, so a
+  hand-edit resolves the way it was last written rather than by section order.
 ## [0.17.4] - 2026-08-19
 
 ### Fixed
