@@ -28,7 +28,7 @@ def test_bare_invocation_shows_help_and_succeeds():
 def test_help_lists_every_command():
     result = runner.invoke(cli, ["--help"])
     assert result.exit_code == 0
-    for command in ("new", "dev", "sync", "doctor"):
+    for command in ("new", "dev", "sync", "doctor", "build", "info", "clean"):
         assert command in result.output
 
 
@@ -36,3 +36,23 @@ def test_dev_outside_a_project_explains_itself(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     result = runner.invoke(cli, ["dev"])
     assert result.exit_code != 0
+
+
+def test_info_outside_a_project_explains_itself(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    result = runner.invoke(cli, ["info"])
+    assert result.exit_code != 0
+
+
+def test_build_outside_a_project_explains_itself(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    result = runner.invoke(cli, ["build"])
+    assert result.exit_code != 0
+
+
+def test_clean_works_with_no_project_at_all(tmp_path, monkeypatch):
+    """`clean` falls back to the default ports rather than requiring a project —
+    the whole point is rescuing a session that has nothing else to go on."""
+    monkeypatch.chdir(tmp_path)
+    result = runner.invoke(cli, ["clean"])
+    assert result.exit_code == 0

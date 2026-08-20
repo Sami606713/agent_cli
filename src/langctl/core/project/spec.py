@@ -17,6 +17,25 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 
 from ..errors import SpecError
 
+#: What `AgentSpec.name` accepts — deployment names become DNS labels and
+#: container names downstream, so this is enforced here rather than at
+#: deploy time. `slugify()` below exists to make any string satisfy it.
+NAME_PATTERN = re.compile(r"[a-z0-9][a-z0-9-]{0,61}[a-z0-9]")
+
+
+def slugify(text: str) -> str:
+    """Turn arbitrary text into a valid project name.
+
+    Used both when a person types a name (`new`) and when one is inferred
+    from something that was never meant to be one — a directory name can
+    contain underscores, spaces, or capitals that `NAME_PATTERN` rejects.
+    """
+    slug = re.sub(r"[^a-z0-9-]+", "-", text.lower()).strip("-")
+    slug = re.sub(r"-{2,}", "-", slug)
+    if len(slug) < 2:
+        slug = f"{slug}-agent" if slug else "agent"
+    return slug[:63].rstrip("-")
+
 
 def _default_middleware() -> dict[str, Any]:
     """Cost and reliability guards every new project starts with.
@@ -438,9 +457,7 @@ class AgentSpec(BaseModel):
     @field_validator("name")
     @classmethod
     def _name_shape(cls, v: str) -> str:
-        # Deployment names become DNS labels and container names downstream, so
-        # constrain here rather than failing at deploy time.
-        if not re.fullmatch(r"[a-z0-9][a-z0-9-]{0,61}[a-z0-9]", v):
+        if not NAME_PATTERN.fullmatch(v):
             raise ValueError(
                 "name must be lowercase alphanumeric with hyphens, 2-63 chars, "
                 "and must not start or end with a hyphen"

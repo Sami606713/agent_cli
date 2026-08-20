@@ -40,6 +40,10 @@ dependencies = [
     "jinja2>=3.1",
     "httpx>=0.27",
     "packaging>=24.0",
+    # The wordmark shown by `new` and `dev`. Pure Python, no C extension, and
+    # it is the one piece of this that hand-rolled ASCII art risks getting
+    # subtly misaligned — a real figlet renderer is worth the small dependency.
+    "pyfiglet>=1.0",
 ]
 
 [project.optional-dependencies]

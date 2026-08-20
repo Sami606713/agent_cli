@@ -20,7 +20,6 @@ import subprocess
 from pathlib import Path
 
 import typer
-from rich.console import Console
 from rich.panel import Panel
 from rich.prompt import Prompt
 from rich.table import Table
@@ -44,6 +43,7 @@ from ..core.deploy.targets import (
     rsync_project,
     write_agent_dockerfile,
 )
+from ..core.deploy.version import deploy_tag, record_deploy, tag_image
 from ..core.errors import LangctlError
 from ..core.generate.pyproject import sync_dependencies
 from ..core.generate.regenerate import apply_spec_change
@@ -52,8 +52,7 @@ from ..core.project.manifest import Project
 from ..core.project.spec_edit import merge_section
 from ..core.runtime.executables import require
 from ..core.runtime.langgraph_cli import find_langgraph
-
-console = Console()
+from ..core.ui.theme import CHECK, WARN, console
 
 
 def _run(argv: list[str], cwd: Path, what: str) -> None:
@@ -162,7 +161,7 @@ def _ensure_postgres_memory(project: Project, spec, *, keep_sqlite: bool):
 
     if keep_sqlite:
         console.print(
-            f"\n[yellow]![/yellow] Long-term memory stays on "
+            f"\n{WARN} Long-term memory stays on "
             f"[bold]{memory.long_term.backend}[/bold] (--keep-sqlite). It is written "
             "inside the container, so a rebuild discards it."
         )
@@ -178,15 +177,15 @@ def _ensure_postgres_memory(project: Project, spec, *, keep_sqlite: bool):
 
     result = apply_spec_change(project.root, spec, new_spec)
     for path in result.written:
-        console.print(f"  [green]✓[/green] {path.relative_to(project.root)}")
+        console.print(f"  {CHECK} {path.relative_to(project.root)}")
     for path in result.skipped:
         console.print(f"  [dim]· {path.relative_to(project.root)} (yours, kept)[/dim]")
 
     changed, _backup = merge_section(project.spec_path, "memory", updated)
     if changed:
-        console.print("  [green]✓[/green] agent.yaml")
+        console.print("  {CHECK} agent.yaml")
     if sync_dependencies(new_spec, project.root / "pyproject.toml"):
-        console.print("  [green]✓[/green] pyproject.toml (psycopg)")
+        console.print("  {CHECK} pyproject.toml (psycopg)")
     console.print("  [dim]the stack's Postgres is used; --keep-sqlite opts out[/dim]")
     return new_spec
 
@@ -264,7 +263,7 @@ def deploy(
             raise typer.Abort()
         argv = compose_down(docker, volumes)
         _run(over_ssh(remote, argv) if remote else argv, root, "docker compose down")
-        console.print(f"[green]✓[/green] stack stopped on {where}")
+        console.print(f"{CHECK} stack stopped on {where}")
         return
 
     # Before anything is generated: langgraph.json and memory/store.py are both
@@ -290,7 +289,7 @@ def deploy(
         overwrite=force,
     )
     for path in result.written:
-        console.print(f"  [green]✓[/green] {path.relative_to(root)}")
+        console.print(f"  {CHECK} {path.relative_to(root)}")
     for path in result.skipped:
         console.print(f"  [dim]· {path.relative_to(root)} (yours, kept)[/dim]")
 
@@ -305,7 +304,7 @@ def deploy(
             root,
             "langgraph dockerfile",
         )
-        console.print(f"  [green]✓[/green] {AGENT_DOCKERFILE}")
+        console.print(f"  {CHECK} {AGENT_DOCKERFILE}")
 
     absent = missing_files(root, domain=domain, frontend=with_frontend)
     if absent:
@@ -345,7 +344,7 @@ def deploy(
         )
     if licensed and not env.get(LICENCE_KEY, "").strip():
         console.print(
-            f"\n[yellow]![/yellow] [bold]{LICENCE_KEY} is not set.[/bold] The Agent Server "
+            f"\n{WARN} [bold]{LICENCE_KEY} is not set.[/bold] The Agent Server "
             "will try your LangSmith API key instead, and refuses to start if that "
             "account has no Agent Server access."
         )
@@ -382,6 +381,15 @@ def deploy(
         console.print("\n[bold]start[/bold]")
         _run(compose_up(docker), root, "docker compose up")
         url = f"https://{domain}" if domain else f"http://localhost:{port}"
+
+    # ---- tag this deploy, so it can be listed and rolled back to ---------
+    tag = deploy_tag(root)
+    images = [f"{spec.name}-agent", *([f"{spec.name}-web"] if with_frontend else [])]
+    for image in images:
+        argv = tag_image(docker, image, tag)
+        _run(over_ssh(remote, argv) if remote else argv, root, f"docker tag ({image})")
+    record_deploy(project, tag, images)
+    console.print(f"[dim]tagged as {tag}[/dim]")
 
     suffix = f" --host {remote.destination}" if remote else ""
     reach = (

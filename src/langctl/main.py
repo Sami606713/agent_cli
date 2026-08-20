@@ -9,12 +9,19 @@ from rich.console import Console
 
 from . import __version__
 from .commands.add import app as add_app
+from .commands.build import build
+from .commands.clean import clean
 from .commands.deploy import deploy
 from .commands.dev import dev
 from .commands.doctor import doctor
+from .commands.env import app as env_app
+from .commands.info import info
+from .commands.init import init
 from .commands.new import new
+from .commands.rollback import rollback
 from .commands.share import share
 from .commands.sync import sync
+from .commands.versions import versions
 from .core.errors import LangctlError
 
 console = Console()
@@ -27,12 +34,19 @@ cli = typer.Typer(
 )
 
 cli.command("new")(new)
+cli.command("init")(init)
 cli.add_typer(add_app)
+cli.add_typer(env_app)
 cli.command("dev")(dev)
+cli.command("build")(build)
 cli.command("deploy")(deploy)
 cli.command("share")(share)
 cli.command("sync")(sync)
 cli.command("doctor")(doctor)
+cli.command("info")(info)
+cli.command("clean")(clean)
+cli.command("versions")(versions)
+cli.command("rollback")(rollback)
 
 
 # invoke_without_command is required for `--version`: Click does not run a

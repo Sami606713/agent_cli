@@ -14,12 +14,9 @@ from __future__ import annotations
 
 from typing import Any
 
-from rich.console import Console
-from rich.prompt import Confirm, Prompt
-
 from ..project.spec import EMBEDDING_DIMS, EMBEDDING_PROVIDER_FOR_CHAT
-
-console = Console()
+from ..ui.prompt import ask, confirm, select
+from ..ui.theme import WARN, console
 
 EMBEDDING_MODES = ["local", "provider", "custom"]
 
@@ -70,61 +67,60 @@ def ask_memory(chat_provider: str, *, accept_defaults: bool = False) -> dict[str
         "conversations, stored in a local SQLite file. No services to run."
     )
 
-    if not Confirm.ask("  Keep long-term memory enabled?", default=True):
+    if not confirm("Keep long-term memory enabled?", default=True):
         return {"long_term": {"enabled": False}}
 
-    console.print("\n[bold]Where should memories be stored?[/bold]")
     for name in MEMORY_BACKENDS:
-        console.print(f"  [cyan]{name:9s}[/cyan] {BACKEND_SUMMARY[name]}")
-    backend = Prompt.ask("  Backend", choices=MEMORY_BACKENDS, default="sqlite")
+        console.print(f"    [muted]{name:9s}{BACKEND_SUMMARY[name]}[/muted]")
+    backend = select("Where should memories be stored?", MEMORY_BACKENDS, default="sqlite")
     memory["long_term"]["backend"] = backend
     if backend == "postgres":
         console.print(
-            "  [dim]Set POSTGRES_URI in .env. The schema is created on first "
-            "start — no migration step of your own.[/dim]"
+            "  [muted]Set POSTGRES_URI in .env. The schema is created on first "
+            "start — no migration step of your own.[/muted]"
         )
 
     console.print(
-        "\n[bold]Semantic search[/bold] lets the agent recall memories by meaning "
+        "\n[value]Semantic search[/value] lets the agent recall memories by meaning "
         "rather than exact key.\n"
-        "  [dim]Without it, memory still works — lookups filter instead of "
-        "ranking by similarity.[/dim]"
+        "  [muted]Without it, memory still works — lookups filter instead of "
+        "ranking by similarity.[/muted]"
     )
-    if not Confirm.ask("  Enable semantic search?", default=False):
+    if not confirm("Enable semantic search?", default=False):
         return memory
 
     memory["long_term"]["semantic_search"] = True
 
-    console.print("\n[bold]How should embeddings be produced?[/bold]")
-    for mode in EMBEDDING_MODES:
-        console.print(f"  [cyan]{mode:9s}[/cyan] {MODE_SUMMARY[mode]}")
-    mode = Prompt.ask("  Embeddings", choices=EMBEDDING_MODES, default="local")
+    mode = select(
+        "How should embeddings be produced?",
+        [f"{name} — {MODE_SUMMARY[name]}" for name in EMBEDDING_MODES],
+        default=f"local — {MODE_SUMMARY['local']}",
+    ).split(" — ", 1)[0]
 
     embeddings: dict[str, Any] = {"mode": mode}
 
     if mode == "local":
-        embeddings["model"] = Prompt.ask("  Model", default=DEFAULT_LOCAL_MODEL)
+        embeddings["model"] = ask("Model", default=DEFAULT_LOCAL_MODEL)
     elif mode == "provider":
         suggested = EMBEDDING_PROVIDER_FOR_CHAT.get(chat_provider, "openai")
         if chat_provider == "anthropic":
             # Not a style note: there is no Anthropic embeddings API, so this
             # is a second vendor and a second key the user did not ask for.
             console.print(
-                "  [yellow]![/yellow] Anthropic has no embeddings API, so this "
-                "adds a second provider and API key."
-            )
-        provider = Prompt.ask(
-            "  Embeddings provider",
+    f"  {WARN} Anthropic has no embeddings API, so this adds a second provider and API key."
+)
+        provider = ask(
+            "Embeddings provider",
             choices=sorted(DEFAULT_EMBEDDING_MODEL),
             default=suggested,
         )
         embeddings["provider"] = provider
-        embeddings["model"] = Prompt.ask("  Model", default=DEFAULT_EMBEDDING_MODEL[provider])
+        embeddings["model"] = ask("Model", default=DEFAULT_EMBEDDING_MODEL[provider])
     else:
         # Custom: we cannot know the vector width, and guessing it is
         # unrecoverable — a wrong value means re-embedding everything later.
-        embeddings["model"] = Prompt.ask("  Name for your embedding function", default="custom")
-        embeddings["dims"] = int(Prompt.ask("  Vector dimensions", default="768"))
+        embeddings["model"] = ask("Name for your embedding function", default="custom")
+        embeddings["dims"] = int(ask("Vector dimensions", default="768"))
 
     identifier = (
         embeddings["model"]
@@ -133,10 +129,10 @@ def ask_memory(chat_provider: str, *, accept_defaults: bool = False) -> dict[str
     )
     known = EMBEDDING_DIMS.get(identifier)
     if known:
-        console.print(f"  [dim]{identifier} → {known} dimensions[/dim]")
+        console.print(f"  [muted]{identifier} → {known} dimensions[/muted]")
     elif "dims" not in embeddings:
         embeddings["dims"] = int(
-            Prompt.ask(f"  Dimensions for {identifier} (not in the known table)", default="768")
+            ask(f"Dimensions for {identifier} (not in the known table)", default="768")
         )
 
     memory["long_term"]["embeddings"] = embeddings

@@ -44,6 +44,97 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   still accepted and migrated on load, and the new layout is written the next
   time the spec is saved. A file carrying both wins per key from `ports`, so a
   hand-edit resolves the way it was last written rather than by section order.
+## [0.17.4] - 2026-08-19
+
+### Fixed
+
+- Release CI for 0.17.3 failed `ruff check`: first-party theme imports sat
+  above third-party `rich` imports, unused `CHECK`/`CROSS`/`WARN` names
+  lingered after the UI pass, and `rollback`/`share` still called `console`
+  after dropping their local `Console()` without importing the shared one.
+  `doctor` aliases the theme `WARN` glyph so it does not collide with the
+  check-status constant of the same name.
+
+## [0.17.3] - 2026-08-19
+
+### Changed
+
+- **The CLI has one look now.** Every command used to instantiate its own
+  `Console()`, so checkmarks, colors and spacing drifted command to command.
+  There is one shared console, one palette, and one set of symbols
+  (`✓` / `✗` / `!` / `◆`) imported from `langctl.core.ui`.
+
+- **`langctl new` and `langctl dev` open with a wordmark.** A figlet banner
+  plus the version, shown only in an interactive terminal — `doctor`, `info`
+  and the rest stay quiet because those are consulted mid-task, not launched.
+  This adds a `pyfiglet` runtime dependency.
+
+- **Wizards use a single prompt style.** `ask` / `confirm` / `select` wrap
+  Rich's own prompts so arrow keys and Ctrl-C stay correct; only the
+  diamond-bullet surface is new. Longer choice lists (providers, deploy
+  targets) print on their own lines instead of wrapping inside parentheses.
+
+## [0.17.0] - 2026-08-19
+
+### Added
+
+- **`langctl init`** — adopt an existing LangGraph project. `new` in reverse:
+  infers a spec from a project that already exists instead of generating one
+  from nothing, and writes exactly one file, `agent.yaml`. Every other langctl
+  command becomes available; no source file moves. Warns rather than silently
+  proceeding when the graph's file path does not match `./src/<pkg>/agent.py`,
+  since `sync`/`dev`/`deploy` always rewrite `langgraph.json`'s `graphs` key to
+  that path.
+
+- **`langctl env show`** / **`langctl env pull`** — required environment
+  variables, and whether `.env` sets each one. `pull` regenerates
+  `.env.example` from the current `agent.yaml`; `.env` itself is only ever
+  created once and never overwritten. The direct fix for `init` leaving an
+  adopted project with no `.env.example` at all.
+
+- **`langctl clean`** — reclaims ports an orphaned `dev` session left behind,
+  only ever killing a process it recognises by name.
+- **`langctl build`** — validates `langgraph.json` and builds the frontend, no
+  Docker, ahead of `deploy --build-only`.
+- **`langctl info`** — a formatted read of `agent.yaml`: model, memory,
+  frontend, middleware, deploy target, live port status.
+- **`langctl versions`** / **`langctl rollback <tag>`** — every deploy this
+  project has shipped, and a way back to one without a rebuild. Every
+  successful `deploy` now tags its images by commit as well as `:latest`.
+
+### Fixed
+
+- `init` inferred no model provider for a hand-written `pyproject.toml`
+  declaring a single-line `dependencies = [...]` array — the dependency parser
+  it reused only matched the multi-line array langctl's own templates produce.
+  Replaced with a real `tomllib` parse.
+
+## [0.16.0] - 2026-08-19
+
+### Added
+
+- **`langctl clean`** — reclaims ports an orphaned `dev` session left behind.
+  Only ever offers to kill a process it recognises by name (`langgraph`,
+  `node`, `next-server`); anything else on the port is reported and left
+  alone.
+- **`langctl build`** — a fast "does this compile" gate ahead of
+  `deploy --build-only`: validates `langgraph.json` and runs the frontend's
+  real `next build`. No Docker, no deployment.
+- **`langctl info`** — a formatted read of `agent.yaml`: model, memory,
+  frontend, middleware, deploy target, and live port status.
+- **`langctl versions`** — every deploy recorded for this project, newest
+  first, with the current one marked.
+- **`langctl rollback <tag>`** — retags a previous deploy's images onto
+  `:latest` and restarts. No rebuild: the images already exist on disk under
+  their own tag from when they were first deployed.
+
+  Every successful `deploy` now tags its images twice — `:latest`, which the
+  stack runs, and `:<commit-sha>` (`-dirty` suffixed when the working tree
+  has uncommitted changes, so a tag can never falsely imply that checking out
+  that commit reproduces what shipped). Versioning could not live inside
+  `docker-compose.yml` itself: `deploy` never rewrites a stack file that
+  already exists, so a tag baked into the template would freeze after the
+  first deploy.
 
 ## [0.15.0] - 2026-08-17
 

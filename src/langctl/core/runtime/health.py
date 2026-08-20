@@ -7,7 +7,9 @@ boots against a dead backend and shows a network error on first message.
 
 from __future__ import annotations
 
+import re
 import socket
+import subprocess
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -43,25 +45,54 @@ def find_free_port(preferred: int, host: str = "127.0.0.1", attempts: int = 20) 
     raise RuntimeError(f"no free port in range {preferred}-{preferred + attempts}")
 
 
-def describe_port_holder(port: int) -> str | None:
-    """Best-effort description of what holds *port*, for error messages.
+#: `ss -ltnp` prints the holder as `users:(("name",pid=1234,fd=5))` when it can
+#: see it at all — only for sockets owned by the calling user, which is exactly
+#: the case `clean` needs: langctl never has permission to kill anyone else's.
+_SS_HOLDER = re.compile(r'\(\("([^"]+)",pid=(\d+)')
 
-    Returns None when we cannot tell (no psutil, no permission, non-Linux).
-    Never raises: this only ever decorates an error we are already reporting.
-    """
+
+def _ss_line_for(port: int) -> str | None:
     try:
-        import subprocess
-
         out = subprocess.run(
             ["ss", "-ltnp", f"sport = :{port}"],
             capture_output=True,
             timeout=2,
             **TEXT_IO,
         ).stdout.strip()
-        lines = [ln for ln in out.splitlines()[1:] if ln.strip()]
-        return lines[0].strip() if lines else None
     except Exception:
         return None
+    lines = [ln for ln in out.splitlines()[1:] if ln.strip()]
+    return lines[0].strip() if lines else None
+
+
+def describe_port_holder(port: int) -> str | None:
+    """Best-effort description of what holds *port*, for error messages.
+
+    Returns None when we cannot tell (no `ss`, no permission, non-Linux).
+    Never raises: this only ever decorates an error we are already reporting.
+    """
+    return _ss_line_for(port)
+
+
+@dataclass
+class PortHolder:
+    pid: int
+    name: str
+
+
+def find_port_holder(port: int) -> PortHolder | None:
+    """Who holds *port*, well enough to offer killing it.
+
+    Only ever finds processes the current user owns — `ss` cannot see anyone
+    else's without root — which is also the only case `clean` may act on.
+    """
+    line = _ss_line_for(port)
+    if line is None:
+        return None
+    match = _SS_HOLDER.search(line)
+    if match is None:
+        return None
+    return PortHolder(pid=int(match.group(2)), name=match.group(1))
 
 
 @dataclass
