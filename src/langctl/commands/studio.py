@@ -15,6 +15,12 @@ from ..core.runtime.health import find_free_port, is_port_free
 from ..core.runtime.supervisor import ProcessSpec, StartupFailure, Supervisor
 from ..core.ui.theme import console
 
+#: Deliberately not the frontend's own dev port (`spec.frontend.port`,
+#: usually 3000) — `langctl studio` and `langctl dev` run the same
+#: underlying Next.js app on two different routes, so they need separate
+#: default ports to run side by side without colliding.
+DEFAULT_PORT = 9595
+
 
 def _frontend_command(project: Project, port: int) -> list[str]:
     """Same resolution `dev` uses: npm/pnpm ship as `.cmd` shims on Windows."""
@@ -50,7 +56,7 @@ def studio(
             fix=f"cd {project.frontend_dir.name} && npm install",
         )
 
-    web_port = port or 3000
+    web_port = port or DEFAULT_PORT
     if not is_port_free(web_port):
         web_port = find_free_port(web_port + 1)
 

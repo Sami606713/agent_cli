@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.18.1] - 2026-08-22
+
+### Fixed
+
+- `langctl studio` defaulted to port 3000, the same default `langctl dev`'s
+  frontend uses — running both against the same project collided. Studio
+  now defaults to port 9595 so the two can run side by side.
+
 ## [0.18.0] - 2026-08-22
 
 ### Added
