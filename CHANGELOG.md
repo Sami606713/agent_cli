@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.19.0] - 2026-08-22
+
+### Added
+
+- **`langctl sync --frontend`** — adds vendored frontend files/dependencies
+  a project is missing (e.g. `/studio`, added in 0.18.0) without touching
+  anything that already exists. Projects scaffolded before a template
+  update had no way to pick up changes to `web/` other than manual copying;
+  this closes that gap for existing projects. Also fixed several
+  `console.print` calls in `sync.py` that were missing an `f` prefix, so
+  `{WARN}`/`{CROSS}` printed literally instead of the actual glyph.
+
 ## [0.18.1] - 2026-08-22
 
 ### Fixed
