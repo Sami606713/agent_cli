@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.18.0] - 2026-08-22
+
+### Added
+
+- **`langctl studio [path]`** — opens a read-only file explorer for a
+  project: a real file tree, a syntax-highlighted code viewer, and a chat
+  panel previewing the interaction shape for future chat-driven editing
+  (not wired to a real agent yet — replies are canned). Runs as a new
+  `/studio` route inside the same per-project frontend `langctl dev` already
+  scaffolds, rather than a separate app, so every existing and new project
+  gets it automatically. All file access happens client-side via the
+  browser's File System Access API — no server ever reads project files.
+  `path` defaults to the current directory when omitted.
+
 ## [0.17.4] - 2026-08-19
 
 ### Fixed

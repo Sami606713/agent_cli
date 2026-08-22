@@ -107,8 +107,9 @@ def ask_memory(chat_provider: str, *, accept_defaults: bool = False) -> dict[str
             # Not a style note: there is no Anthropic embeddings API, so this
             # is a second vendor and a second key the user did not ask for.
             console.print(
-    f"  {WARN} Anthropic has no embeddings API, so this adds a second provider and API key."
-)
+                f"  {WARN} Anthropic has no embeddings API, so this adds a second "
+                "provider and API key."
+            )
         provider = ask(
             "Embeddings provider",
             choices=sorted(DEFAULT_EMBEDDING_MODEL),

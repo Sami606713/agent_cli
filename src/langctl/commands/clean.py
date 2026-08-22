@@ -90,8 +90,7 @@ def clean(
                 console.print(f"  {CHECK} port {port_number} is free")
             else:
                 console.print(
-                    f"  {WARN} pid {holder.pid} did not exit in time; "
-                    f"try again or kill it yourself"
+                    f"  {WARN} pid {holder.pid} did not exit in time; try again or kill it yourself"
                 )
 
     if not found_any:

@@ -20,6 +20,7 @@ from .commands.init import init
 from .commands.new import new
 from .commands.rollback import rollback
 from .commands.share import share
+from .commands.studio import studio
 from .commands.sync import sync
 from .commands.versions import versions
 from .core.errors import LangctlError
@@ -41,6 +42,7 @@ cli.command("dev")(dev)
 cli.command("build")(build)
 cli.command("deploy")(deploy)
 cli.command("share")(share)
+cli.command("studio")(studio)
 cli.command("sync")(sync)
 cli.command("doctor")(doctor)
 cli.command("info")(info)

@@ -231,9 +231,7 @@ def add_tool(
     else:
         # The registry has been restructured; splicing blindly would be worse
         # than telling the user exactly what to add.
-        console.print(
-            "  {WARN} could not auto-register — add these to tools/__init__.py:"
-        )
+        console.print("  {WARN} could not auto-register — add these to tools/__init__.py:")
         console.print(
             f"      [cyan]from {project.spec.package_name}.tools.{module} import {symbol}[/cyan]"
         )
