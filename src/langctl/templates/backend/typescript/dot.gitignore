@@ -1,0 +1,20 @@
+# secrets
+.env
+.env.local
+.env.*.local
+
+# agentctl
+.agentctl/
+.langgraph_api/
+
+# node
+node_modules/
+dist/
+.next/
+*.tsbuildinfo
+
+# databases — these contain real conversation data
+data/
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm

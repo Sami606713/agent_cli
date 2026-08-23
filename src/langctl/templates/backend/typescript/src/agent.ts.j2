@@ -1,0 +1,38 @@
+/**
+ * The {{ name }} agent.
+ *
+ * `langgraph.json` points at the exported `graph` in this file. Anything the
+ * Agent Server, Studio, or a deployment needs is reachable from that one
+ * symbol — see `./src/agent.ts:graph` in langgraph.json.
+ *
+ * Long-term memory is *not* constructed here. The Agent Server opens it from
+ * `store.path` in langgraph.json and injects it as `runtime.store`, so its
+ * lifetime matches the server's rather than this module's import.
+ */
+
+import { createAgent } from "langchain";
+
+{% if model_needs_construction %}
+import { buildModel } from "./config.js";
+{% else %}
+import { settings } from "./config.js";
+{% endif %}
+import { getCheckpointer } from "./memory/checkpointer.js";
+import { MIDDLEWARE } from "./middleware/index.js";
+import { SYSTEM_PROMPT } from "./prompts/index.js";
+import { TOOLS } from "./tools/index.js";
+
+export const graph = createAgent({
+{% if model_needs_construction %}
+  // Top-level await: initChatModel is async in the JS client, unlike Python's.
+  // Supported because package.json declares "type": "module" on Node 20+.
+  model: await buildModel(),
+{% else %}
+  model: settings.modelIdentifier,
+{% endif %}
+  tools: TOOLS,
+  systemPrompt: SYSTEM_PROMPT,
+  middleware: MIDDLEWARE,
+  checkpointer: getCheckpointer(),
+  name: "{{ name }}",
+});

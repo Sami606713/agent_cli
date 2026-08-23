@@ -35,7 +35,7 @@ def _resolve_port(preferred: int, role: str, auto: bool) -> int:
 def _backend_command(project: Project, port: int, docker: bool, tunnel: bool) -> list[str]:
     # Prefers the project's own venv: `langgraph dev` imports the graph in-process,
     # so it has to run where the agent's dependencies are installed.
-    langgraph = find_langgraph(project.root)
+    langgraph = find_langgraph(project.root, project.spec.runtime)
     if docker:
         # `up` takes its port from its own compose config, not a flag.
         return up_command(langgraph, project.langgraph_config_path)
@@ -117,10 +117,12 @@ def dev(
     # Keep langgraph.json current so a spec edit does not need a manual sync.
     write_langgraph_config(spec, project.langgraph_config_path)
 
-    api_port = DOCKER_PORT if docker else (backend_port or spec.backend.port)
+    api_port = DOCKER_PORT if docker else (backend_port or spec.ports.agent)
     if wants_backend and not docker:
         api_port = _resolve_port(api_port, "agent", auto_port)
-    web_port = _resolve_port(port or spec.frontend.port, "web", auto_port) if has_frontend else None
+    web_port = (
+        _resolve_port(port or spec.ports.frontend, "web", auto_port) if has_frontend else None
+    )
 
     api_url = f"http://127.0.0.1:{api_port}"
 

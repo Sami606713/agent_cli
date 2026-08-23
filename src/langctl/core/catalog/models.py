@@ -38,56 +38,154 @@ class Provider:
     #: server langctl never saw.
     model_from_env: bool = False
     note: str | None = None
+    #: npm equivalent of `package`, for a typescript project. `@langchain/*`
+    #: names follow one convention across the ecosystem — confirmed against
+    #: the docs for anthropic, openai, google_genai, google_vertexai, groq,
+    #: mistralai and bedrock (`@langchain/aws`); the rest are inferred by the
+    #: same `@langchain/<provider>` pattern and may need correcting for a
+    #: provider whose JS package does not follow it.
+    npm_package: str | None = None
 
 
 #: Verified against `langchain.chat_models.init_chat_model`.
 PROVIDERS: dict[str, Provider] = {
     p.key: p
     for p in (
-        Provider("anthropic", "langchain-anthropic>=1.0", "ANTHROPIC_API_KEY", "claude-opus-5"),
-        Provider("openai", "langchain-openai>=1.0", "OPENAI_API_KEY", "gpt-5.5"),
-        Provider("google_genai", "langchain-google-genai>=2.0", "GOOGLE_API_KEY", "gemini-2.5-pro"),
+        Provider(
+            "anthropic",
+            "langchain-anthropic>=1.0",
+            "ANTHROPIC_API_KEY",
+            "claude-opus-5",
+            npm_package="@langchain/anthropic",
+        ),
+        Provider(
+            "openai",
+            "langchain-openai>=1.0",
+            "OPENAI_API_KEY",
+            "gpt-5.5",
+            npm_package="@langchain/openai",
+        ),
+        Provider(
+            "google_genai",
+            "langchain-google-genai>=2.0",
+            "GOOGLE_API_KEY",
+            "gemini-2.5-pro",
+            npm_package="@langchain/google-genai",
+        ),
         Provider(
             "google_vertexai",
             "langchain-google-vertexai>=3.0",
             "GOOGLE_APPLICATION_CREDENTIALS",
             "gemini-2.5-pro",
             note="Uses a service-account file, not an API key.",
+            npm_package="@langchain/google-vertexai",
         ),
         Provider(
             "azure_openai",
             "langchain-openai>=1.0",
             "AZURE_OPENAI_API_KEY",
             note="Also needs AZURE_OPENAI_ENDPOINT.",
+            npm_package="@langchain/openai",
         ),
-        Provider("azure_ai", "langchain-azure-ai>=1.0", "AZURE_AI_API_KEY"),
+        Provider(
+            "azure_ai",
+            "langchain-azure-ai>=1.0",
+            "AZURE_AI_API_KEY",
+            npm_package="@langchain/azure-ai",
+        ),
         Provider(
             "bedrock",
             "langchain-aws>=1.0",
             "AWS_ACCESS_KEY_ID",
             note="Uses the standard AWS credential chain.",
+            npm_package="@langchain/aws",
         ),
-        Provider("bedrock_converse", "langchain-aws>=1.0", "AWS_ACCESS_KEY_ID"),
-        Provider("anthropic_bedrock", "langchain-aws>=1.0", "AWS_ACCESS_KEY_ID"),
-        Provider("cohere", "langchain-cohere>=1.0", "COHERE_API_KEY"),
-        Provider("mistralai", "langchain-mistralai>=1.0", "MISTRAL_API_KEY"),
-        Provider("groq", "langchain-groq>=1.0", "GROQ_API_KEY"),
-        Provider("together", "langchain-together>=1.0", "TOGETHER_API_KEY"),
-        Provider("fireworks", "langchain-fireworks>=1.0", "FIREWORKS_API_KEY"),
-        Provider("openrouter", "langchain-openrouter>=1.0", "OPENROUTER_API_KEY"),
-        Provider("deepseek", "langchain-deepseek>=1.0", "DEEPSEEK_API_KEY"),
-        Provider("xai", "langchain-xai>=1.0", "XAI_API_KEY"),
-        Provider("perplexity", "langchain-perplexity>=1.0", "PPLX_API_KEY"),
-        Provider("nvidia", "langchain-nvidia-ai-endpoints>=1.0", "NVIDIA_API_KEY"),
-        Provider("ibm", "langchain-ibm>=1.0", "WATSONX_APIKEY"),
-        Provider("upstage", "langchain-upstage>=1.0", "UPSTAGE_API_KEY"),
-        Provider("baseten", "langchain-baseten>=1.0", "BASETEN_API_KEY"),
+        Provider(
+            "bedrock_converse",
+            "langchain-aws>=1.0",
+            "AWS_ACCESS_KEY_ID",
+            npm_package="@langchain/aws",
+        ),
+        Provider(
+            "anthropic_bedrock",
+            "langchain-aws>=1.0",
+            "AWS_ACCESS_KEY_ID",
+            npm_package="@langchain/aws",
+        ),
+        Provider(
+            "cohere", "langchain-cohere>=1.0", "COHERE_API_KEY", npm_package="@langchain/cohere"
+        ),
+        Provider(
+            "mistralai",
+            "langchain-mistralai>=1.0",
+            "MISTRAL_API_KEY",
+            npm_package="@langchain/mistralai",
+        ),
+        Provider("groq", "langchain-groq>=1.0", "GROQ_API_KEY", npm_package="@langchain/groq"),
+        Provider(
+            "together",
+            "langchain-together>=1.0",
+            "TOGETHER_API_KEY",
+            npm_package="@langchain/community",
+            note="JS support ships through @langchain/community, not a dedicated package.",
+        ),
+        Provider(
+            "fireworks",
+            "langchain-fireworks>=1.0",
+            "FIREWORKS_API_KEY",
+            npm_package="@langchain/community",
+            note="JS support ships through @langchain/community, not a dedicated package.",
+        ),
+        Provider(
+            "openrouter",
+            "langchain-openrouter>=1.0",
+            "OPENROUTER_API_KEY",
+            npm_package="@langchain/openrouter",
+        ),
+        Provider(
+            "deepseek",
+            "langchain-deepseek>=1.0",
+            "DEEPSEEK_API_KEY",
+            npm_package="@langchain/deepseek",
+        ),
+        Provider("xai", "langchain-xai>=1.0", "XAI_API_KEY", npm_package="@langchain/xai"),
+        Provider(
+            "perplexity",
+            "langchain-perplexity>=1.0",
+            "PPLX_API_KEY",
+            npm_package="@langchain/community",
+            note="JS support ships through @langchain/community, not a dedicated package.",
+        ),
+        Provider(
+            "nvidia",
+            "langchain-nvidia-ai-endpoints>=1.0",
+            "NVIDIA_API_KEY",
+            npm_package="@langchain/community",
+            note="JS support ships through @langchain/community, not a dedicated package.",
+        ),
+        Provider(
+            "ibm", "langchain-ibm>=1.0", "WATSONX_APIKEY", npm_package="@langchain/community"
+        ),
+        Provider(
+            "upstage",
+            "langchain-upstage>=1.0",
+            "UPSTAGE_API_KEY",
+            npm_package="@langchain/community",
+        ),
+        Provider(
+            "baseten",
+            "langchain-baseten>=1.0",
+            "BASETEN_API_KEY",
+            npm_package=None,
+            note="No published JS integration yet; set model.package for the typescript runtime.",
+        ),
         Provider(
             "litellm",
             "langchain-litellm>=1.0",
             None,
             model_from_env=True,
             note="Set MODEL_NAME to whatever your proxy routes to.",
+            npm_package="@langchain/community",
         ),
         Provider(
             "huggingface",
@@ -95,6 +193,7 @@ PROVIDERS: dict[str, Provider] = {
             "HUGGINGFACEHUB_API_TOKEN",
             model_from_env=True,
             note="Set MODEL_NAME to the repo id you want to run.",
+            npm_package="@langchain/community",
         ),
         Provider(
             "ollama",
@@ -103,6 +202,7 @@ PROVIDERS: dict[str, Provider] = {
             model_from_env=True,
             note="Runs locally; no API key. Set MODEL_NAME to a model you "
             "have pulled — check with `ollama list`.",
+            npm_package="@langchain/ollama",
         ),
     )
 }

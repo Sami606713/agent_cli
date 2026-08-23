@@ -11,7 +11,7 @@ import pytest
 from pydantic import ValidationError
 
 from langctl.core.catalog.models import PROVIDERS, WIZARD_PROVIDERS, is_known, normalise
-from langctl.core.generate.deps import required_env_vars, runtime_packages
+from langctl.core.generate.deps import npm_packages, required_env_vars, runtime_packages
 from langctl.core.generate.scaffold import scaffold
 from langctl.core.project.spec import AgentSpec, ModelSpec
 
@@ -147,6 +147,54 @@ class TestDependencyFanOut:
     def test_provider_key_is_required(self):
         spec = AgentSpec(name="demo-agent", model={"provider": "groq"})
         assert "GROQ_API_KEY" in required_env_vars(spec)
+
+
+class TestNpmDependencyFanOut:
+    """The typescript-runtime counterpart to TestDependencyFanOut."""
+
+    @pytest.mark.parametrize(
+        "provider,package",
+        [
+            ("anthropic", "@langchain/anthropic"),
+            ("openai", "@langchain/openai"),
+            ("groq", "@langchain/groq"),
+        ],
+    )
+    def test_provider_package_is_added(self, provider, package):
+        spec = AgentSpec(name="demo-agent", runtime="typescript", model={"provider": provider})
+        assert package in npm_packages(spec)
+
+    def test_core_packages_always_present(self):
+        spec = AgentSpec(name="demo-agent", runtime="typescript")
+        deps = npm_packages(spec)
+        assert "langchain" in deps
+        assert "@langchain/langgraph" in deps
+        assert "@langchain/core" in deps
+
+    def test_explicit_model_package_has_no_npm_equivalent(self):
+        # A --model-package value is a PyPI name; a typescript project using an
+        # unknown provider has to add its own npm dependency by hand.
+        spec = AgentSpec(
+            name="demo-agent",
+            runtime="typescript",
+            model={"provider": "mycloud", "name": "m1", "package": "langchain-mycloud"},
+        )
+        assert spec.model.npm_package_requirement is None
+
+    def test_postgres_checkpointer_adds_its_package(self):
+        spec = AgentSpec(
+            name="demo-agent",
+            runtime="typescript",
+            memory={"short_term": {"backend": "postgres"}},
+        )
+        assert "@langchain/langgraph-checkpoint-postgres" in npm_packages(spec)
+
+    def test_sqlite_long_term_store_adds_no_package(self):
+        # store.ts.j2 falls back to InMemoryStore for this backend — there is
+        # no real JS sqlite store to depend on.
+        spec = AgentSpec(name="demo-agent", runtime="typescript")
+        assert spec.memory.long_term.backend == "sqlite"
+        assert "@langchain/langgraph-checkpoint-sqlite" not in npm_packages(spec)
 
 
 class TestGeneratedConfig:

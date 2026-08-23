@@ -1,4 +1,5 @@
 import json
+import re
 
 import pytest
 from pydantic import ValidationError
@@ -32,16 +33,87 @@ class TestModeCoherence:
         with pytest.raises(ValidationError, match="embedded"):
             AgentSpec(name="x-y", runtime="python", mode="embedded")
 
-    def test_node_embedded_is_valid(self):
-        s = AgentSpec(name="x-y", runtime="node", mode="embedded")
+    def test_typescript_embedded_is_valid(self):
+        s = AgentSpec(name="x-y", runtime="typescript", mode="embedded")
         assert s.uses_agent_server is False
-
-    def test_port_collision_rejected(self):
-        with pytest.raises(ValidationError, match="must differ"):
-            AgentSpec(name="x-y", backend={"port": 3000}, frontend={"port": 3000})
 
     def test_proxy_mode_uses_agent_server(self):
         assert spec().uses_agent_server is True
+
+
+class TestPorts:
+    """Both ports are the user's to choose: 3000 and 2024 are already taken on
+    plenty of machines, and the answer must not be "edit the source"."""
+
+    def test_defaults(self):
+        s = spec()
+        assert (s.ports.frontend, s.ports.agent) == (3000, 2024)
+
+    def test_configured_ports_are_kept(self):
+        s = spec(ports={"frontend": 3001, "agent": 2025})
+        assert (s.ports.frontend, s.ports.agent) == (3001, 2025)
+
+    def test_one_port_can_move_alone(self):
+        assert spec(ports={"agent": 2025}).ports.frontend == 3000
+
+    def test_agent_url_follows_the_configured_port(self):
+        assert spec(ports={"agent": 2025}).local_backend_url() == "http://127.0.0.1:2025"
+
+    def test_collision_rejected(self):
+        with pytest.raises(ValidationError, match="must differ"):
+            AgentSpec(name="x-y", ports={"frontend": 3000, "agent": 3000})
+
+    def test_collision_allowed_without_a_frontend(self):
+        # Nothing binds the frontend port, so there is nothing to collide with.
+        s = AgentSpec(
+            name="x-y",
+            frontend={"enabled": False, "kind": "none"},
+            ports={"frontend": 2024, "agent": 2024},
+        )
+        assert s.ports.agent == 2024
+
+    @pytest.mark.parametrize("port", [0, -1, 65536, 99999])
+    def test_out_of_range_rejected(self, port):
+        with pytest.raises(ValidationError):
+            AgentSpec(name="x-y", ports={"agent": port})
+
+    def test_ports_reach_the_templates(self):
+        from langctl.core.generate.scaffold import render_context
+
+        ctx = render_context(spec(ports={"frontend": 3001, "agent": 2025}))
+        assert ctx["frontend_port"] == 3001
+        assert ctx["backend_port"] == 2025
+
+
+class TestLegacyPortLayout:
+    """Projects scaffolded before `ports` existed keep loading and keep their
+    ports — the values lived under frontend/backend then."""
+
+    def test_legacy_sections_are_migrated(self):
+        s = AgentSpec.from_yaml(
+            "name: legacy-agent\nfrontend:\n  port: 3001\nbackend:\n  port: 2025\n"
+        )
+        assert (s.ports.frontend, s.ports.agent) == (3001, 2025)
+
+    def test_legacy_collision_still_rejected(self):
+        with pytest.raises(SpecError, match="must differ"):
+            AgentSpec.from_yaml(
+                "name: legacy-agent\nfrontend:\n  port: 3000\nbackend:\n  port: 3000\n"
+            )
+
+    def test_explicit_ports_win_per_key(self):
+        s = AgentSpec.from_yaml(
+            "name: legacy-agent\nports:\n  agent: 2026\n"
+            "frontend:\n  port: 3001\nbackend:\n  port: 2025\n"
+        )
+        assert (s.ports.frontend, s.ports.agent) == (3001, 2026)
+
+    def test_saved_file_uses_the_new_layout(self):
+        text = AgentSpec.from_yaml("name: legacy-agent\nbackend:\n  port: 2025\n").to_yaml()
+        assert "ports:\n  frontend: 3000\n  agent: 2025" in text
+        # The old top-level section is gone; `backend` under memory is a
+        # different key and stays.
+        assert not re.search(r"^backend:", text, re.M)
 
 
 class TestLanggraphConfig:
@@ -52,11 +124,12 @@ class TestLanggraphConfig:
         assert cfg["python_version"] == "3.11"
         assert "node_version" not in cfg
 
-    def test_node_config_shape(self):
-        cfg = AgentSpec(name="x-y", runtime="node").to_langgraph_config()
+    def test_typescript_config_shape(self):
+        cfg = AgentSpec(name="x-y", runtime="typescript").to_langgraph_config()
         # Schema declares node_version as a *string* enum ["20"]; an int fails validation.
         assert cfg["node_version"] == "20"
         assert isinstance(cfg["node_version"], str)
+        assert cfg["graphs"] == {"agent": "./src/agent.ts:graph"}
         assert "python_version" not in cfg
         assert "dependencies" not in cfg
 
@@ -77,13 +150,13 @@ class TestLanggraphConfig:
         cfg = spec(memory={"long_term": {"backend": "memory"}}).to_langgraph_config()
         assert "store" not in cfg
 
-    def test_generative_ui_only_for_node(self):
+    def test_generative_ui_only_for_typescript(self):
         py = spec(frontend={"generative_ui": True}).to_langgraph_config()
         assert "ui" not in py  # Python agents cannot bundle TSX components
-        node = AgentSpec(
-            name="x-y", runtime="node", frontend={"generative_ui": True}
+        ts = AgentSpec(
+            name="x-y", runtime="typescript", frontend={"generative_ui": True}
         ).to_langgraph_config()
-        assert node["ui"] == {"agent": "./src/agent/ui.tsx"}
+        assert ts["ui"] == {"agent": "./src/agent/ui.tsx"}
 
     def test_cors_allows_studio(self):
         # The browser uses a same-origin proxy, but Studio talks to the server directly.
@@ -91,7 +164,7 @@ class TestLanggraphConfig:
         assert "https://smith.langchain.com" in cors["allow_origins"]
 
     def test_emitted_keys_are_all_owned(self):
-        for s in (spec(), AgentSpec(name="x-y", runtime="node")):
+        for s in (spec(), AgentSpec(name="x-y", runtime="typescript")):
             assert set(s.to_langgraph_config()) <= AgentSpec.owned_keys()
 
 
@@ -101,7 +174,8 @@ class TestRoundTrip:
             name="round-trip",
             runtime="python",
             memory={"checkpointer": "redis", "store": "memory", "semantic_search": True},
-            frontend={"port": 4000, "proxy_prefix": "/api/x/"},
+            ports={"frontend": 4000},
+            frontend={"proxy_prefix": "/api/x/"},
         )
         assert AgentSpec.from_yaml(original.to_yaml()) == original
 

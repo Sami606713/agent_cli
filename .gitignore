@@ -10,3 +10,8 @@ build/
 .env.local
 support-bot/
 demo-agent/
+
+# LangGraph API
+.langgraph_api
+video/
+plans/

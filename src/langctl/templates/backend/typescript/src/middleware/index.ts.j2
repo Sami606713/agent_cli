@@ -1,0 +1,33 @@
+/**
+ * Middleware, in execution order.
+ *
+ * `createAgent` takes this list as a sequence and runs it in order.
+ *
+ * The typescript template ships no built-in middleware yet — langctl's
+ * middleware catalog (cost/reliability guards like tool-call limits and
+ * retries) is currently Python-only; porting each one to `createMiddleware`
+ * is tracked as follow-up work, not done here. Custom middleware you write
+ * yourself under `middleware/custom/` still works and always runs last, same
+ * as the Python template.
+{% if middleware_enabled %}
+ *
+ * agent.yaml has these built-ins enabled, but they have no typescript
+ * equivalent yet, so they are not included below:
+{% for key in middleware_enabled %}
+ *   - {{ key }}
+{% endfor %}
+{% endif %}
+ */
+
+{% if middleware_custom %}
+import { {{ middleware_custom_names }} } from "./custom/index.js";
+{% endif %}
+
+export const MIDDLEWARE = [
+{% if not middleware_custom %}
+  // Nothing enabled. `langctl add middleware --custom <name>` scaffolds one.
+{% endif %}
+{% for entry in middleware_custom %}
+  {{ entry.cls }}(),
+{% endfor %}
+];

@@ -109,6 +109,35 @@ def _install_python(dest: Path) -> InstallReport:
     return report
 
 
+def _install_typescript(dest: Path) -> InstallReport:
+    """`npm install` (or pnpm) at the project root, for a typescript backend.
+
+    Same shape as `_install_python`: nothing lands globally, and a missing
+    tool is reported rather than silently skipped.
+    """
+    report = InstallReport()
+    pm = package_manager()
+    if pm is None:
+        report.warn(
+            "no npm or pnpm found — no backend dependencies installed",
+            "npm install",
+            "install Node.js 20+: https://nodejs.org",
+        )
+        return report
+
+    label = Path(pm).stem
+    result = run([pm, "install"], cwd=dest)
+    if result.returncode != 0:
+        report.failed(
+            "install failed — the agent cannot run yet",
+            result.stderr,
+            f"{label} install",
+        )
+    else:
+        report.ok("backend dependencies installed")
+    return report
+
+
 def _install_frontend(web: Path) -> InstallReport:
     report = InstallReport()
     # The resolved path, not the bare name: on Windows npm and pnpm are .cmd
@@ -135,7 +164,7 @@ def _install_frontend(web: Path) -> InstallReport:
     return report
 
 
-def _install(dest: Path) -> list[str]:
+def _install(dest: Path, runtime: str) -> list[str]:
     """Install everything the project needs, both halves at once.
 
     The two are independent — separate directories, separate tools, no shared
@@ -146,7 +175,10 @@ def _install(dest: Path) -> list[str]:
     ready, and only then does the next-steps panel say so.
     """
     web = dest / "web"
-    jobs: dict[str, Callable[[], InstallReport]] = {"python": lambda: _install_python(dest)}
+    if runtime == "python":
+        jobs: dict[str, Callable[[], InstallReport]] = {"python": lambda: _install_python(dest)}
+    else:
+        jobs = {"backend": lambda: _install_typescript(dest)}
     if web.is_dir():
         jobs["frontend"] = lambda: _install_frontend(web)
 
@@ -171,7 +203,7 @@ def _install(dest: Path) -> list[str]:
 def new(
     name: str = typer.Argument(None, help="Project name (lowercase, hyphens)."),
     directory: Path = typer.Option(None, "--dir", help="Where to create it. Default: ./<name>"),
-    runtime: str = typer.Option(None, "--runtime", help="python or node."),
+    runtime: str = typer.Option(None, "--runtime", help="python or typescript."),
     model_provider: str = typer.Option(None, "--model-provider"),
     model_name: str = typer.Option(None, "--model"),
     model_base_url: str = typer.Option(
@@ -212,7 +244,7 @@ def new(
     name = slugify(name)
 
     if runtime is None:
-        runtime = "python" if yes else select("Runtime", ["python", "node"], default="python")
+        runtime = "python" if yes else select("Runtime", ["python", "typescript"], default="python")
 
     if frontend is None:
         frontend = True if yes else confirm("Include a chat frontend?", default=True)
@@ -338,7 +370,8 @@ def new(
 
     # Commands the user must run because an install did not complete. With
     # --no-install that is everything, by request.
-    pending = _install(dest) if install else ["uv sync --extra dev"]
+    default_install_cmd = "uv sync --extra dev" if spec.runtime == "python" else "npm install"
+    pending = _install(dest, spec.runtime) if install else [default_install_cmd]
 
     rel = dest.name if dest.parent == Path.cwd() else str(dest)
     steps = [f"cd {rel}"]

@@ -48,7 +48,7 @@ def _default_middleware() -> dict[str, Any]:
     return default_config()
 
 
-Runtime = Literal["python", "node"]
+Runtime = Literal["python", "typescript"]
 Mode = Literal["proxy", "embedded"]
 FrontendKind = Literal["agent_chat_ui", "none"]
 
@@ -181,6 +181,19 @@ class ModelSpec(BaseModel):
 
         known = get(self.provider)
         return known.package if known else None
+
+    @property
+    def npm_package_requirement(self) -> str | None:
+        """npm equivalent of `package_requirement`, for a typescript project."""
+        if self.package:
+            # An explicit --model-package is a PyPI name; it carries no npm
+            # equivalent, so a typescript project using an unknown provider
+            # must supply its own dependency by hand.
+            return None
+        from ..catalog.models import get
+
+        known = get(self.provider)
+        return known.npm_package if known else None
 
 
 MemoryBackend = Literal["sqlite", "postgres", "memory"]
@@ -356,7 +369,6 @@ class MiddlewareSpec(BaseModel):
 class FrontendSpec(BaseModel):
     enabled: bool = True
     kind: FrontendKind = "agent_chat_ui"
-    port: int = 3000
     proxy_prefix: str = "/api/agent"
     generative_ui: bool = False
 
@@ -375,8 +387,18 @@ class FrontendSpec(BaseModel):
         return v.rstrip("/")
 
 
-class BackendSpec(BaseModel):
-    port: int = 2024
+class PortsSpec(BaseModel):
+    """Where this project's two local servers listen.
+
+    Configurable because the defaults collide with whatever else the machine is
+    already running — 3000 is every other Next.js app, 2024 is any other Agent
+    Server — and the alternative was editing generated source. Keys are named
+    for the roles `langctl dev` prints, `frontend` and `agent`, not for the spec
+    sections they used to live under.
+    """
+
+    frontend: int = Field(default=3000, ge=1, le=65535)
+    agent: int = Field(default=2024, ge=1, le=65535)
 
 
 class ObservabilitySpec(BaseModel):
@@ -410,10 +432,40 @@ class AgentSpec(BaseModel):
         default_factory=lambda: MiddlewareSpec(**_default_middleware())
     )
     frontend: FrontendSpec = Field(default_factory=FrontendSpec)
-    backend: BackendSpec = Field(default_factory=BackendSpec)
+    ports: PortsSpec = Field(default_factory=PortsSpec)
     observability: ObservabilitySpec = Field(default_factory=ObservabilitySpec)
     deploy: DeploySpec = Field(default_factory=DeploySpec)
     environments: list[str] = Field(default_factory=lambda: ["dev", "prod"])
+
+    @model_validator(mode="before")
+    @classmethod
+    def _migrate_ports(cls, data: object) -> object:
+        """Accept the layout used before `ports` existed, ports living apart.
+
+        old: {frontend: {port: 3001}, backend: {port: 2025}}
+        new: {ports: {frontend: 3001, agent: 2025}}
+
+        A project scaffolded by an earlier version keeps running untouched. An
+        explicit `ports` wins per key, so a file carrying both — one hand-edited,
+        one left over — resolves the way the user last wrote it rather than by
+        section order.
+        """
+        if not isinstance(data, dict):
+            return data
+
+        legacy: dict[str, Any] = {}
+        for section, key in (("frontend", "frontend"), ("backend", "agent")):
+            value = data.get(section)
+            if isinstance(value, dict) and value.get("port") is not None:
+                legacy[key] = value["port"]
+        if not legacy:
+            return data
+
+        ports = data.get("ports")
+        ports = dict(ports) if isinstance(ports, dict) else {}
+        data = dict(data)
+        data["ports"] = {**legacy, **ports}
+        return data
 
     @field_validator("name")
     @classmethod
@@ -429,16 +481,27 @@ class AgentSpec(BaseModel):
     def _coherent(self) -> AgentSpec:
         # A Python agent cannot live inside Next.js route handlers. Catching this
         # here is what stops the wizard from producing a project that can never run.
-        if self.mode == "embedded" and self.runtime != "node":
+        if self.mode == "embedded" and self.runtime != "typescript":
             raise ValueError(
-                "mode 'embedded' requires runtime 'node' — a Python agent cannot run "
+                "mode 'embedded' requires runtime 'typescript' — a Python agent cannot run "
                 "inside Next.js route handlers. Use mode 'proxy'."
             )
         if self.frontend.enabled and self.frontend.kind == "none":
             raise ValueError("frontend.enabled is true but frontend.kind is 'none'")
-        if self.frontend.enabled and self.frontend.port == self.backend.port:
+        if self.runtime == "typescript" and self.memory.long_term.semantic_search:
+            # The typescript template has no embeddings module (see
+            # templates/backend/typescript/src/memory/store.ts.j2) — there is
+            # no JS-side equivalent shipped yet, so scaffolding this combination
+            # would produce a store.ts that silently ignores semantic_search
+            # rather than a project that fails loudly at generation time.
             raise ValueError(
-                f"frontend.port and backend.port are both {self.frontend.port}; they must differ"
+                "memory.long_term.semantic_search is not yet supported for runtime "
+                "'typescript' — the generated store has no embeddings wiring. "
+                "Disable semantic_search, or use runtime 'python'."
+            )
+        if self.frontend.enabled and self.ports.frontend == self.ports.agent:
+            raise ValueError(
+                f"ports.frontend and ports.agent are both {self.ports.frontend}; they must differ"
             )
         return self
 
@@ -493,7 +556,7 @@ class AgentSpec(BaseModel):
         return self.mode == "proxy"
 
     def local_backend_url(self, port: int | None = None) -> str:
-        return f"http://127.0.0.1:{port or self.backend.port}"
+        return f"http://127.0.0.1:{port or self.ports.agent}"
 
     # ---- langgraph.json -------------------------------------------------
 
@@ -510,7 +573,7 @@ class AgentSpec(BaseModel):
             cfg["graphs"] = {self.graph_id: f"./src/{self.package_name}/agent.py:graph"}
         else:
             cfg["node_version"] = "20"
-            cfg["graphs"] = {self.graph_id: "./src/agent/index.ts:graph"}
+            cfg["graphs"] = {self.graph_id: "./src/agent.ts:graph"}
         cfg["env"] = ".env"
 
         # Long-term memory is wired through `store.path`, not `store.index`.
@@ -521,17 +584,27 @@ class AgentSpec(BaseModel):
         # It also *replaces* the deployed server's managed Postgres store, so we
         # only emit it when the project actually owns its store.
         if self.memory.long_term.enabled and self.memory.long_term.backend != "memory":
-            cfg["store"] = {"path": f"./src/{self.package_name}/memory/store.py:generate_store"}
+            if self.runtime == "python":
+                cfg["store"] = {
+                    "path": f"./src/{self.package_name}/memory/store.py:generate_store"
+                }
+            else:
+                cfg["store"] = {"path": "./src/memory/store.ts:generateStore"}
 
         # Short-term is the opposite trade-off: the server manages threads well,
         # and a custom checkpointer loses adelete_for_runs. Only override when
         # the project explicitly asked for durable local thread history.
         if not self.memory.short_term.is_managed:
-            cfg["checkpointer"] = {
-                "path": f"./src/{self.package_name}/memory/checkpointer.py:generate_checkpointer"
-            }
+            if self.runtime == "python":
+                cfg["checkpointer"] = {
+                    "path": (
+                        f"./src/{self.package_name}/memory/checkpointer.py:generate_checkpointer"
+                    )
+                }
+            else:
+                cfg["checkpointer"] = {"path": "./src/memory/checkpointer.ts:generateCheckpointer"}
 
-        if self.frontend.generative_ui and self.runtime == "node":
+        if self.frontend.generative_ui and self.runtime == "typescript":
             cfg["ui"] = {self.graph_id: "./src/agent/ui.tsx"}
 
         # The browser reaches the Agent Server through a same-origin proxy, so CORS

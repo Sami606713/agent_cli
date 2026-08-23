@@ -52,11 +52,23 @@ def _tool(name: str, args: list[str], install: str, required: bool) -> Check:
     return Check(name, OK, _version_of([resolved, *args]) or "installed")
 
 
-def _langgraph_cli(project_root: Path | None = None) -> Check:
-    # Must resolve the same way `dev` does — the project's venv first — or doctor
-    # reports "not found" for a project that runs perfectly well.
+def _runtime_of(project_root: Path | None) -> str:
+    """Best-effort runtime for a project doctor has not fully loaded yet."""
+    if project_root is None:
+        return "python"
     try:
-        executable = find_langgraph(project_root) if project_root else None
+        return AgentSpec.load(project_root / "agent.yaml").runtime
+    except Exception:
+        return "python"
+
+
+def _langgraph_cli(project_root: Path | None = None) -> Check:
+    # Must resolve the same way `dev` does — the project's own install first —
+    # or doctor reports "not found" for a project that runs perfectly well.
+    try:
+        executable = (
+            find_langgraph(project_root, _runtime_of(project_root)) if project_root else None
+        )
     except MissingDependency:
         executable = None
     if executable is None:
@@ -141,12 +153,12 @@ def _port(port: int, role: str) -> Check:
     )
 
 
-def _config_check(root: Path) -> Check:
+def _config_check(root: Path, runtime: str = "python") -> Check:
     """Validate langgraph.json using the real CLI, which is the authority."""
     if not (root / "langgraph.json").is_file():
         return Check("langgraph.json", FAIL, "missing", "Run `langctl sync`.")
     try:
-        langgraph = find_langgraph(root)
+        langgraph = find_langgraph(root, runtime)
     except MissingDependency:
         return Check("langgraph.json", WARN, "present (cannot validate: no langgraph CLI)")
 
@@ -268,7 +280,7 @@ def _project_checks() -> list[Check]:
 
     checks.append(Check("agent.yaml", OK, f"{spec.name} ({spec.runtime}, mode={spec.mode})"))
 
-    checks.append(_config_check(root))
+    checks.append(_config_check(root, spec.runtime))
 
     key = spec.model.api_key_env
     env_file = root / ".env"
@@ -293,9 +305,9 @@ def _project_checks() -> list[Check]:
     if memory_check:
         checks.append(memory_check)
 
-    checks.append(_port(spec.backend.port, "agent"))
+    checks.append(_port(spec.ports.agent, "agent"))
     if spec.frontend.enabled:
-        checks.append(_port(spec.frontend.port, "web"))
+        checks.append(_port(spec.ports.frontend, "web"))
     return checks
 
 

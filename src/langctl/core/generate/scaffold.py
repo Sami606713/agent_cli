@@ -8,7 +8,7 @@ from typing import Any
 
 from ..catalog.middleware import ORDER_LABEL, call_expressions, missing_config, ordered
 from ..project.spec import AgentSpec
-from .deps import required_env_vars, runtime_packages
+from .deps import npm_packages, required_env_vars, runtime_packages
 from .render import render_layers, render_tree
 
 #: Vercel's Hobby plan caps serverless functions at 60s. Agent runs regularly
@@ -43,8 +43,8 @@ def render_context(spec: AgentSpec) -> dict[str, Any]:
         "model_from_env": spec.model.model_from_env,
         "langsmith": spec.observability.langsmith,
         "langsmith_project": spec.observability.project or spec.name,
-        "backend_port": spec.backend.port,
-        "frontend_port": spec.frontend.port,
+        "backend_port": spec.ports.agent,
+        "frontend_port": spec.ports.frontend,
         # agent-chat-ui mounts its passthrough at /api and we vendor its source
         # unmodified, so the prefix is fixed rather than configurable.
         "proxy_prefix": "/api",
@@ -62,6 +62,7 @@ def render_context(spec: AgentSpec) -> dict[str, Any]:
         "embedding_fields": spec.memory.long_term.embeddings.fields,
         # dependency fan-out: a feature and its package must never drift
         "runtime_packages": runtime_packages(spec),
+        "npm_packages": npm_packages(spec),
         "required_env": required_env_vars(spec),
         **middleware_context(spec),
     }
