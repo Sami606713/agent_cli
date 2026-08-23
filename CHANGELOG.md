@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.20.0] - 2026-08-24
+
 ### Added
 
 - **Both local ports are configurable in `agent.yaml`.** 3000 and 2024 are the
