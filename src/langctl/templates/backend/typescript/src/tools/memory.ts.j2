@@ -1,0 +1,67 @@
+/**
+ * Tools that read and write long-term memory.
+ *
+ * These reach the store through `runtime.store`, which the Agent Server
+ * injects. Nothing here constructs a store — that happens once, in
+ * memory/store.ts.
+ *
+ * Memories are namespaced per user so one user's facts can never surface in
+ * another's conversation.
+ */
+
+import { tool, type ToolRuntime } from "langchain";
+import * as z from "zod";
+
+const NAMESPACE_PREFIX = "memories";
+
+function namespace(runtime: ToolRuntime): [string, string] {
+  const userId = (runtime.context as { userId?: string } | undefined)?.userId ?? "default";
+  return [NAMESPACE_PREFIX, String(userId)];
+}
+
+export const saveMemory = tool(
+  async ({ key, text }, runtime: ToolRuntime) => {
+    if (!runtime.store) {
+      return "Memory is not configured, so nothing was saved.";
+    }
+    await runtime.store.put(namespace(runtime), key, { text });
+    return `Saved memory ${JSON.stringify(key)}.`;
+  },
+  {
+    name: "save_memory",
+    description:
+      'Remember a fact about the user for future conversations. Use this when the user ' +
+      'states a durable preference or fact about themselves ("I prefer metric units", ' +
+      '"my team uses Postgres"). Do not use it for anything only true within this ' +
+      "conversation.",
+    schema: z.object({
+      key: z.string().describe('Short stable identifier, e.g. "units" or "timezone".'),
+      text: z.string().describe("The fact to remember, written as a full sentence."),
+    }),
+  },
+);
+
+export const recallMemory = tool(
+  async ({ query, limit }, runtime: ToolRuntime) => {
+    if (!runtime.store) {
+      return "Memory is not configured.";
+    }
+    const items = await runtime.store.search(namespace(runtime), { query, limit: limit ?? 5 });
+    if (!items.length) {
+      return "No memories found.";
+    }
+    return items
+      .map((item) => `- ${item.key}: ${(item.value as { text?: string }).text ?? item.value}`)
+      .join("\n");
+  },
+  {
+    name: "recall_memory",
+    description:
+      "Look up previously saved facts about the user. Use this when the answer might depend " +
+      "on something the user told you in an earlier conversation.",
+    schema: z.object({
+      query: z.string().describe("What to look for, in natural language."),
+      limit: z.number().int().default(5).describe("Maximum number of memories to return."),
+    }),
+  },
+);

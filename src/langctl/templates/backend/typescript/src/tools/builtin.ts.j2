@@ -1,0 +1,63 @@
+/**
+ * Tools available to the agent.
+ *
+ * Add tools here and list them in `TOOLS`. Keep the description sharp — the
+ * model reads it to decide when to call the tool, so it is prompt text, not
+ * just docs.
+ */
+
+import { tool } from "langchain";
+import * as z from "zod";
+
+export const getCurrentTime = tool(
+  ({ timezoneName }) => {
+    const tz = timezoneName?.toUpperCase() === "UTC" || !timezoneName ? "UTC" : timezoneName;
+    try {
+      return new Date().toLocaleString("sv-SE", { timeZone: tz }).replace(" ", "T");
+    } catch {
+      // Returning a message beats throwing: the model can recover from this.
+      return `Unknown timezone ${JSON.stringify(timezoneName)}. Try "UTC".`;
+    }
+  },
+  {
+    name: "get_current_time",
+    description:
+      "Get the current date and time. Use this whenever the answer depends on what time it " +
+      "is now — the model's own sense of the current date is unreliable.",
+    schema: z.object({
+      timezoneName: z
+        .string()
+        .default("UTC")
+        .describe('IANA timezone name, e.g. "UTC" or "America/New_York".'),
+    }),
+  },
+);
+
+const ALLOWED_CHARS = /^[0-9+\-*/(). ]*$/;
+
+export const calculate = tool(
+  ({ expression }) => {
+    if (!expression || !ALLOWED_CHARS.test(expression)) {
+      return "Refused: only basic arithmetic characters are allowed.";
+    }
+    try {
+      // Safe: the character allowlist above excludes names, calls and identifiers,
+      // so this can only ever evaluate an arithmetic expression.
+      // eslint-disable-next-line no-new-func
+      const result = Function(`"use strict"; return (${expression});`)();
+      return String(result);
+    } catch (exc) {
+      return `Could not evaluate ${JSON.stringify(expression)}: ${exc}`;
+    }
+  },
+  {
+    name: "calculate",
+    description: 'Evaluate an arithmetic expression, e.g. "42 * 17". Only digits, spaces and ' +
+      "+ - * / ( ) . are accepted.",
+    schema: z.object({
+      expression: z.string(),
+    }),
+  },
+);
+
+export const BUILTIN_TOOLS = [getCurrentTime, calculate];

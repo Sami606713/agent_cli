@@ -1,0 +1,109 @@
+/**
+ * Configuration, validated at import time.
+ *
+ * Failing here — at server start, with a clear message — is much cheaper than
+ * failing on the first user message with a provider auth error.
+ */
+
+{% if model_needs_construction %}
+import { initChatModel } from "langchain";
+
+{% endif %}
+export class ConfigError extends Error {}
+
+export interface Settings {
+  modelProvider: string;
+  modelName: string;
+{% if model_base_url %}
+  modelBaseUrl: string;
+{% endif %}
+  readonly modelIdentifier: string;
+  readonly isServerManaged: boolean;
+}
+
+function buildSettings(): Settings {
+  const modelProvider = process.env.MODEL_PROVIDER ?? "{{ model_provider }}";
+{% if model_from_env %}
+  // No default on purpose. {{ model_provider }} serves whatever this machine
+  // or gateway has, so a name compiled in here would fail on the first
+  // message against a server langctl never saw. Set MODEL_NAME in .env.
+  const modelName = process.env.MODEL_NAME ?? "";
+{% else %}
+  const modelName = process.env.MODEL_NAME ?? "{{ model_name }}";
+{% endif %}
+{% if model_base_url %}
+  // OpenAI-compatible endpoint. Overridable so the same image can point at a
+  // local runtime in development and a gateway in production.
+  const modelBaseUrl = process.env.MODEL_BASE_URL ?? "{{ model_base_url }}";
+{% endif %}
+
+  return {
+    modelProvider,
+    modelName,
+{% if model_base_url %}
+    modelBaseUrl,
+{% endif %}
+    get modelIdentifier() {
+      return `${this.modelProvider}:${this.modelName}`;
+    },
+    // True when running inside a LangGraph Agent Server deployment. The
+    // server sets this and supplies its own Postgres checkpointer and store;
+    // `langgraph dev` does not.
+    get isServerManaged() {
+      return Boolean(process.env.LANGGRAPH_CLOUD || process.env.LANGGRAPH_API_URL);
+    },
+  };
+}
+
+export const settings: Settings = buildSettings();
+
+export function validate(): void {
+{% if model_from_env %}
+  if (!settings.modelName) {
+    throw new ConfigError(
+      "MODEL_NAME is not set.\n" +
+        "{{ model_provider }} serves whatever you have available, so there is no safe default.\n" +
+{% if model_provider == "ollama" %}
+        "List what you have pulled with `ollama list`, then set MODEL_NAME in .env."
+{% else %}
+        "Set MODEL_NAME in .env — see .env.example."
+{% endif %}
+    );
+  }
+{% endif %}
+{% if model_key_env %}
+  if (!process.env.{{ model_key_env }}) {
+    throw new ConfigError(
+      `{{ model_key_env }} is not set, but MODEL_PROVIDER=${settings.modelProvider}.\n` +
+        "Add it to .env — see .env.example."
+    );
+  }
+{% endif %}
+}
+
+// Skipped during tests so the suite runs without provider credentials.
+if (!process.env.{{ name_upper }}_SKIP_CONFIG_VALIDATION) {
+  validate();
+}
+
+{% if model_needs_construction %}
+/**
+ * Construct the chat model.
+ *
+ * A plain "provider:model" string cannot carry an endpoint or per-model
+ * options, so this project builds the model object instead and hands that to
+ * `createAgent`, which accepts either.
+ */
+export async function buildModel() {
+  // initChatModel is async in the JS client (unlike Python's), because it may
+  // need to dynamically import the provider's own package.
+  return initChatModel(settings.modelIdentifier, {
+{% if model_base_url %}
+    baseUrl: settings.modelBaseUrl,
+{% endif %}
+{% for key, value in model_options.items() %}
+    {{ key }}: {{ value | tojson }},
+{% endfor %}
+  });
+}
+{% endif %}

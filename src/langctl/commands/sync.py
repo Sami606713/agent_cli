@@ -6,12 +6,13 @@ import json
 
 import typer
 
+from ..core.generate import package_json as ts_deps
+from ..core.generate import pyproject as py_deps
 from ..core.generate.frontend_sync import (
     add_frontend_dependencies,
     missing_frontend_dependencies,
     sync_frontend_files,
 )
-from ..core.generate.pyproject import dependency_drift, sync_dependencies
 from ..core.generate.scaffold import config_drift, write_langgraph_config
 from ..core.project.manifest import Project
 from ..core.ui.theme import CHECK, CROSS, WARN, console
@@ -72,12 +73,17 @@ def sync(
         except json.JSONDecodeError:
             console.print(f"{WARN} langgraph.json is not valid JSON — regenerating")
 
+    is_python = project.spec.runtime == "python"
+    deps_module = py_deps if is_python else ts_deps
+    manifest_name = "pyproject.toml" if is_python else "package.json"
+    manifest_path = project.root / manifest_name
+
     # encoding is explicit: the generated pyproject.toml contains an em dash,
     # which the locale codec on Windows cannot always decode.
-    pyproject = (project.root / "pyproject.toml").read_text(encoding="utf-8")
-    missing, extra = dependency_drift(project.spec, pyproject)
+    manifest_text = manifest_path.read_text(encoding="utf-8")
+    missing, extra = deps_module.dependency_drift(project.spec, manifest_text)
     if missing or extra:
-        console.print(f"{WARN} pyproject.toml dependencies are out of date:")
+        console.print(f"{WARN} {manifest_name} dependencies are out of date:")
         for package in missing:
             console.print(f"  [green]+[/green] {package}")
         for package in extra:
@@ -100,7 +106,7 @@ def sync(
         if missing or extra:
             console.print(f"\n{CROSS} dependencies differ from agent.yaml")
             raise typer.Exit(1)
-        console.print(f"{CHECK} langgraph.json and pyproject.toml are in sync")
+        console.print(f"{CHECK} langgraph.json and {manifest_name} are in sync")
         return
 
     write_langgraph_config(project.spec, path)
@@ -109,7 +115,7 @@ def sync(
     # Config alone is not enough: a feature whose package is missing starts the
     # server and then dies on import, while `langgraph validate` still says the
     # config is fine.
-    pyproject = project.root / "pyproject.toml"
-    if sync_dependencies(project.spec, pyproject):
-        console.print(f"{CHECK} wrote pyproject.toml (dependencies)")
-        console.print("[dim]run `uv sync` to install the change[/dim]")
+    if deps_module.sync_dependencies(project.spec, manifest_path):
+        console.print(f"{CHECK} wrote {manifest_name} (dependencies)")
+        install_hint = "uv sync" if is_python else "npm install"
+        console.print(f"[dim]run `{install_hint}` to install the change[/dim]")

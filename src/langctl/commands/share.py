@@ -88,7 +88,9 @@ def share(
         ProcessSpec(
             name="agent",
             command=dev_command(
-                find_langgraph(project.root), project.langgraph_config_path, api_port
+                find_langgraph(project.root, project.spec.runtime),
+                project.langgraph_config_path,
+                api_port,
             ),
             cwd=project.root,
             color="green",

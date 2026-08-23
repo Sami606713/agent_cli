@@ -1,0 +1,57 @@
+/**
+ * Short-term memory — the messages inside a single thread.
+ *
+ * Backend for this project: **{{ short_term_backend }}**
+ *
+{% if short_term_backend in ("server", "memory") %}
+ * The Agent Server manages checkpoints. Nothing here is wired into
+ * langgraph.json; `getCheckpointer()` exists only for scripts and tests that
+ * import the graph directly, where no server is present.
+ *
+ * This is the default because overriding the checkpointer *costs*
+ * capability: the server warns that a custom checkpointer lacking
+ * `deleteRunCheckpoints` cannot clean up checkpoints from cancelled runs, so
+ * `multitask_strategy="rollback"` leaves stale thread state behind.
+{% else %}
+ * `langgraph.json` points `checkpointer.path` at `generateCheckpointer`, so
+ * thread history is written to {{ short_term_path }} and survives a restart.
+{% endif %}
+ */
+
+{% if short_term_backend == "sqlite" %}
+import { SqliteSaver } from "@langchain/langgraph-checkpoint-sqlite";
+{% elif short_term_backend == "postgres" %}
+import { PostgresSaver } from "@langchain/langgraph-checkpoint-postgres";
+{% else %}
+import { MemorySaver } from "@langchain/langgraph";
+{% endif %}
+import { settings } from "../config.js";
+
+/** Checkpointer for direct-import use; undefined when a server manages it. */
+export function getCheckpointer() {
+  if (settings.isServerManaged) {
+    return undefined;
+  }
+{% if short_term_backend == "sqlite" %}
+  return SqliteSaver.fromConnString(process.env.CHECKPOINT_PATH ?? "{{ short_term_path }}");
+{% elif short_term_backend == "postgres" %}
+  const uri = process.env.POSTGRES_URI;
+  if (!uri) {
+    throw new Error("POSTGRES_URI is not set — required for the postgres checkpointer");
+  }
+  return PostgresSaver.fromConnString(uri);
+{% else %}
+  // Lost on exit. Fine for tests; not for anything a user comes back to.
+  return new MemorySaver();
+{% endif %}
+}
+
+{% if short_term_backend in ("sqlite", "postgres") %}
+/**
+ * The checkpointer the Agent Server uses. Referenced by langgraph.json as
+ * `checkpointer.path`; the server calls `.setup()` itself on first use.
+ */
+export function generateCheckpointer() {
+  return getCheckpointer();
+}
+{% endif %}

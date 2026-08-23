@@ -1,0 +1,58 @@
+/**
+ * Tests for the {{ name }} agent.
+ *
+ * These run without provider credentials: tools are pure functions and the
+ * graph is only inspected, not invoked. Add model-backed tests behind a
+ * separate suite.
+ */
+
+import { describe, expect, it } from "vitest";
+import { calculate, getCurrentTime } from "../src/tools/builtin.js";
+import { TOOLS } from "../src/tools/index.js";
+
+describe("tool registry", () => {
+  it("registers the builtin tools", () => {
+    const names = TOOLS.map((t) => t.name);
+    expect(names).toEqual(expect.arrayContaining(["get_current_time", "calculate"]));
+  });
+
+  it("every tool has a description", () => {
+    // The description is prompt text the model reads; an empty one is a bug.
+    for (const t of TOOLS) {
+      expect(t.description?.trim()).toBeTruthy();
+    }
+  });
+});
+
+describe("calculate", () => {
+  it("evaluates arithmetic", async () => {
+    expect(await calculate.invoke({ expression: "42 * 17" })).toBe("714");
+  });
+
+  it("refuses non-arithmetic input", async () => {
+    const result = await calculate.invoke({ expression: "require('fs').readFileSync('/etc/passwd')" });
+    expect(result).toContain("Refused");
+  });
+
+  it("handles a bad expression without throwing", async () => {
+    const result = await calculate.invoke({ expression: "1/" });
+    expect(result).toContain("Could not evaluate");
+  });
+});
+
+describe("getCurrentTime", () => {
+  it("returns an ISO-ish timestamp", async () => {
+    const result = await getCurrentTime.invoke({ timezoneName: "UTC" });
+    expect(result).toContain("T");
+  });
+});
+
+describe("graph", () => {
+  it("is importable and exposes invoke", async () => {
+    // Catches the most common deploy-time failure: langgraph.json points at a
+    // symbol that does not import cleanly.
+    process.env.{{ name_upper }}_SKIP_CONFIG_VALIDATION = "1";
+    const { graph } = await import("../src/agent.js");
+    expect(typeof graph.invoke).toBe("function");
+  });
+});

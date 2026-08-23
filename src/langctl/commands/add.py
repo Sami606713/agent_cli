@@ -13,6 +13,8 @@ from rich.panel import Panel
 
 from ..core.catalog.middleware import REGISTRY, conflicts_in, missing_config, ordered
 from ..core.errors import LangctlError
+from ..core.generate import package_json as ts_deps
+from ..core.generate import pyproject as py_deps
 from ..core.generate.boilerplate import (
     TOOL_TEMPLATE,
     class_name,
@@ -21,7 +23,6 @@ from ..core.generate.boilerplate import (
     symbol_name,
 )
 from ..core.generate.boilerplate import render as render_custom
-from ..core.generate.pyproject import sync_dependencies
 from ..core.generate.regenerate import apply_spec_change
 from ..core.generate.render import render_layers
 from ..core.generate.scaffold import (
@@ -89,8 +90,11 @@ def _apply(project: Project, old: AgentSpec, spec: AgentSpec) -> None:
     write_langgraph_config(spec, project.langgraph_config_path)
     console.print("  [green]✓[/green] langgraph.json")
 
-    if sync_dependencies(spec, project.root / "pyproject.toml"):
-        console.print("  [green]✓[/green] pyproject.toml (dependencies)")
+    is_python = spec.runtime == "python"
+    manifest_name = "pyproject.toml" if is_python else "package.json"
+    deps_module = py_deps if is_python else ts_deps
+    if deps_module.sync_dependencies(spec, project.root / manifest_name):
+        console.print(f"  [green]✓[/green] {manifest_name} (dependencies)")
 
 
 @app.command("memory")

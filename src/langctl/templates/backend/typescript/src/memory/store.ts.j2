@@ -1,0 +1,70 @@
+/**
+ * Long-term memory — facts that outlive any single conversation.
+ *
+ * `langgraph.json` points at `generateStore` below when this project owns its
+ * store. Without it, `langgraph dev` keeps long-term memory in process and
+ * loses it on every restart.
+ *
+{% if long_term_backend == "sqlite" %}
+ * Backend requested: **sqlite**. There is no documented JS long-term store
+ * backed by sqlite (unlike the checkpoint-sqlite package, which ships a
+ * *checkpointer* but not a *store*) — see
+ * /oss/javascript/langgraph/checkpointers.mdx. This falls back to
+ * `InMemoryStore`, which is **not durable across restarts**. Swap in
+ * `PostgresStore` (backend: postgres) for real persistence, or track
+ * @langchain/langgraph-checkpoint-sqlite for a store implementation.
+{% elif long_term_backend == "postgres" %}
+ * Backend for this project: **postgres**.
+{% else %}
+ * Backend for this project: **memory** (not durable across restarts).
+{% endif %}
+ */
+
+{% if long_term_backend == "postgres" %}
+import { PostgresStore } from "@langchain/langgraph-checkpoint-postgres/store";
+{% else %}
+import { InMemoryStore } from "@langchain/langgraph";
+{% endif %}
+
+{% if long_term_backend == "postgres" %}
+function cleanUri(uri: string | undefined): string | undefined {
+  // PostgresStore talks to the driver directly and rejects a SQLAlchemy
+  // `+driver` form, so a URI copied from a Python config fails to parse.
+  if (!uri) return uri;
+  for (const prefix of ["postgresql+asyncpg://", "postgresql+psycopg://", "postgresql+psycopg2://"]) {
+    if (uri.startsWith(prefix)) {
+      return uri.replace(prefix, "postgresql://");
+    }
+  }
+  return uri;
+}
+{% endif %}
+
+/** The store the Agent Server uses. Referenced by langgraph.json. */
+export async function generateStore() {
+{% if long_term_backend == "postgres" %}
+  const uri = cleanUri(process.env.POSTGRES_URI);
+  if (!uri) {
+    throw new Error("POSTGRES_URI is not set — required for the postgres store");
+  }
+  const store = PostgresStore.fromConnString(uri);
+  await store.setup();
+  return store;
+{% else %}
+  // In-memory: everything is lost when the process exits.
+  return new InMemoryStore();
+{% endif %}
+}
+
+/** Synchronous variant, for scripts and tests that never see the server. */
+export function generateSyncStore() {
+{% if long_term_backend == "postgres" %}
+  const uri = cleanUri(process.env.POSTGRES_URI);
+  if (!uri) {
+    throw new Error("POSTGRES_URI is not set — required for the postgres store");
+  }
+  return PostgresStore.fromConnString(uri);
+{% else %}
+  return new InMemoryStore();
+{% endif %}
+}

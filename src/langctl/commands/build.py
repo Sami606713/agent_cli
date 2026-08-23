@@ -33,7 +33,7 @@ def build(
 
     console.print("[bold]agent[/bold]")
     write_langgraph_config(spec, project.langgraph_config_path)
-    langgraph = find_langgraph(project.root)
+    langgraph = find_langgraph(project.root, spec.runtime)
     argv = validate_command(langgraph, project.langgraph_config_path)
     result = subprocess.run(argv, cwd=project.root)
     if result.returncode != 0:

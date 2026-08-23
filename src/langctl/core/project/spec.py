@@ -48,7 +48,7 @@ def _default_middleware() -> dict[str, Any]:
     return default_config()
 
 
-Runtime = Literal["python", "node"]
+Runtime = Literal["python", "typescript"]
 Mode = Literal["proxy", "embedded"]
 FrontendKind = Literal["agent_chat_ui", "none"]
 
@@ -181,6 +181,19 @@ class ModelSpec(BaseModel):
 
         known = get(self.provider)
         return known.package if known else None
+
+    @property
+    def npm_package_requirement(self) -> str | None:
+        """npm equivalent of `package_requirement`, for a typescript project."""
+        if self.package:
+            # An explicit --model-package is a PyPI name; it carries no npm
+            # equivalent, so a typescript project using an unknown provider
+            # must supply its own dependency by hand.
+            return None
+        from ..catalog.models import get
+
+        known = get(self.provider)
+        return known.npm_package if known else None
 
 
 MemoryBackend = Literal["sqlite", "postgres", "memory"]
@@ -468,13 +481,24 @@ class AgentSpec(BaseModel):
     def _coherent(self) -> AgentSpec:
         # A Python agent cannot live inside Next.js route handlers. Catching this
         # here is what stops the wizard from producing a project that can never run.
-        if self.mode == "embedded" and self.runtime != "node":
+        if self.mode == "embedded" and self.runtime != "typescript":
             raise ValueError(
-                "mode 'embedded' requires runtime 'node' — a Python agent cannot run "
+                "mode 'embedded' requires runtime 'typescript' — a Python agent cannot run "
                 "inside Next.js route handlers. Use mode 'proxy'."
             )
         if self.frontend.enabled and self.frontend.kind == "none":
             raise ValueError("frontend.enabled is true but frontend.kind is 'none'")
+        if self.runtime == "typescript" and self.memory.long_term.semantic_search:
+            # The typescript template has no embeddings module (see
+            # templates/backend/typescript/src/memory/store.ts.j2) — there is
+            # no JS-side equivalent shipped yet, so scaffolding this combination
+            # would produce a store.ts that silently ignores semantic_search
+            # rather than a project that fails loudly at generation time.
+            raise ValueError(
+                "memory.long_term.semantic_search is not yet supported for runtime "
+                "'typescript' — the generated store has no embeddings wiring. "
+                "Disable semantic_search, or use runtime 'python'."
+            )
         if self.frontend.enabled and self.ports.frontend == self.ports.agent:
             raise ValueError(
                 f"ports.frontend and ports.agent are both {self.ports.frontend}; they must differ"
@@ -549,7 +573,7 @@ class AgentSpec(BaseModel):
             cfg["graphs"] = {self.graph_id: f"./src/{self.package_name}/agent.py:graph"}
         else:
             cfg["node_version"] = "20"
-            cfg["graphs"] = {self.graph_id: "./src/agent/index.ts:graph"}
+            cfg["graphs"] = {self.graph_id: "./src/agent.ts:graph"}
         cfg["env"] = ".env"
 
         # Long-term memory is wired through `store.path`, not `store.index`.
@@ -560,17 +584,27 @@ class AgentSpec(BaseModel):
         # It also *replaces* the deployed server's managed Postgres store, so we
         # only emit it when the project actually owns its store.
         if self.memory.long_term.enabled and self.memory.long_term.backend != "memory":
-            cfg["store"] = {"path": f"./src/{self.package_name}/memory/store.py:generate_store"}
+            if self.runtime == "python":
+                cfg["store"] = {
+                    "path": f"./src/{self.package_name}/memory/store.py:generate_store"
+                }
+            else:
+                cfg["store"] = {"path": "./src/memory/store.ts:generateStore"}
 
         # Short-term is the opposite trade-off: the server manages threads well,
         # and a custom checkpointer loses adelete_for_runs. Only override when
         # the project explicitly asked for durable local thread history.
         if not self.memory.short_term.is_managed:
-            cfg["checkpointer"] = {
-                "path": f"./src/{self.package_name}/memory/checkpointer.py:generate_checkpointer"
-            }
+            if self.runtime == "python":
+                cfg["checkpointer"] = {
+                    "path": (
+                        f"./src/{self.package_name}/memory/checkpointer.py:generate_checkpointer"
+                    )
+                }
+            else:
+                cfg["checkpointer"] = {"path": "./src/memory/checkpointer.ts:generateCheckpointer"}
 
-        if self.frontend.generative_ui and self.runtime == "node":
+        if self.frontend.generative_ui and self.runtime == "typescript":
             cfg["ui"] = {self.graph_id: "./src/agent/ui.tsx"}
 
         # The browser reaches the Agent Server through a same-origin proxy, so CORS

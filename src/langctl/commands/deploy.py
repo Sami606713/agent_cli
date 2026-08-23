@@ -45,7 +45,8 @@ from ..core.deploy.targets import (
 )
 from ..core.deploy.version import deploy_tag, record_deploy, tag_image
 from ..core.errors import LangctlError
-from ..core.generate.pyproject import sync_dependencies
+from ..core.generate import package_json as ts_deps
+from ..core.generate import pyproject as py_deps
 from ..core.generate.regenerate import apply_spec_change
 from ..core.generate.scaffold import write_langgraph_config
 from ..core.project.manifest import Project
@@ -184,8 +185,11 @@ def _ensure_postgres_memory(project: Project, spec, *, keep_sqlite: bool):
     changed, _backup = merge_section(project.spec_path, "memory", updated)
     if changed:
         console.print("  {CHECK} agent.yaml")
-    if sync_dependencies(new_spec, project.root / "pyproject.toml"):
-        console.print("  {CHECK} pyproject.toml (psycopg)")
+    is_python = new_spec.runtime == "python"
+    manifest_name = "pyproject.toml" if is_python else "package.json"
+    deps_module = py_deps if is_python else ts_deps
+    if deps_module.sync_dependencies(new_spec, project.root / manifest_name):
+        console.print(f"  {CHECK} {manifest_name} (postgres driver)")
     console.print("  [dim]the stack's Postgres is used; --keep-sqlite opts out[/dim]")
     return new_spec
 
@@ -298,7 +302,7 @@ def deploy(
         # Only the production image needs a generated Dockerfile: langgraph.json
         # is the sole thing that knows its base image and Python version. The
         # default stack ships its own, templated above.
-        langgraph = find_langgraph(root)
+        langgraph = find_langgraph(root, spec.runtime)
         _run(
             write_agent_dockerfile(langgraph, root / AGENT_DOCKERFILE),
             root,

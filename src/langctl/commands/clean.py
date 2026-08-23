@@ -40,7 +40,7 @@ def _looks_like_ours(holder: PortHolder) -> bool:
 def _ports_to_check() -> dict[int, str]:
     try:
         spec = Project.load().spec
-        return {spec.backend.port: "agent", spec.frontend.port: "web"}
+        return {spec.ports.agent: "agent", spec.ports.frontend: "web"}
     except Exception:
         # No project here, or a spec that fails to load — check the defaults
         # anyway, since that is almost always what the user means by "clean".

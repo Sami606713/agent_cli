@@ -47,12 +47,12 @@ def info() -> None:
     _row(table, "memory", memory_line)
 
     if spec.frontend.enabled:
-        frontend_line = f"{spec.frontend.kind}, port {spec.frontend.port}"
+        frontend_line = f"{spec.frontend.kind}, port {spec.ports.frontend}"
     else:
         frontend_line = "none (--no-frontend)"
     _row(table, "frontend", frontend_line)
 
-    _row(table, "backend port", str(spec.backend.port))
+    _row(table, "backend port", str(spec.ports.agent))
 
     enabled_middleware = [
         name
@@ -70,7 +70,7 @@ def info() -> None:
         _row(table, "deploy target", "[dim]not chosen yet — `langctl deploy` will ask[/dim]")
 
     ports = []
-    for port, role in ((spec.backend.port, "agent"), (spec.frontend.port, "web")):
+    for port, role in ((spec.ports.agent, "agent"), (spec.ports.frontend, "web")):
         state = "[dim]free[/dim]" if is_port_free(port) else "[yellow]in use[/yellow]"
         ports.append(f"{port} ({role}) {state}")
     _row(table, "ports", "  ·  ".join(ports))

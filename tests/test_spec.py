@@ -33,8 +33,8 @@ class TestModeCoherence:
         with pytest.raises(ValidationError, match="embedded"):
             AgentSpec(name="x-y", runtime="python", mode="embedded")
 
-    def test_node_embedded_is_valid(self):
-        s = AgentSpec(name="x-y", runtime="node", mode="embedded")
+    def test_typescript_embedded_is_valid(self):
+        s = AgentSpec(name="x-y", runtime="typescript", mode="embedded")
         assert s.uses_agent_server is False
 
     def test_proxy_mode_uses_agent_server(self):
@@ -124,11 +124,12 @@ class TestLanggraphConfig:
         assert cfg["python_version"] == "3.11"
         assert "node_version" not in cfg
 
-    def test_node_config_shape(self):
-        cfg = AgentSpec(name="x-y", runtime="node").to_langgraph_config()
+    def test_typescript_config_shape(self):
+        cfg = AgentSpec(name="x-y", runtime="typescript").to_langgraph_config()
         # Schema declares node_version as a *string* enum ["20"]; an int fails validation.
         assert cfg["node_version"] == "20"
         assert isinstance(cfg["node_version"], str)
+        assert cfg["graphs"] == {"agent": "./src/agent.ts:graph"}
         assert "python_version" not in cfg
         assert "dependencies" not in cfg
 
@@ -149,13 +150,13 @@ class TestLanggraphConfig:
         cfg = spec(memory={"long_term": {"backend": "memory"}}).to_langgraph_config()
         assert "store" not in cfg
 
-    def test_generative_ui_only_for_node(self):
+    def test_generative_ui_only_for_typescript(self):
         py = spec(frontend={"generative_ui": True}).to_langgraph_config()
         assert "ui" not in py  # Python agents cannot bundle TSX components
-        node = AgentSpec(
-            name="x-y", runtime="node", frontend={"generative_ui": True}
+        ts = AgentSpec(
+            name="x-y", runtime="typescript", frontend={"generative_ui": True}
         ).to_langgraph_config()
-        assert node["ui"] == {"agent": "./src/agent/ui.tsx"}
+        assert ts["ui"] == {"agent": "./src/agent/ui.tsx"}
 
     def test_cors_allows_studio(self):
         # The browser uses a same-origin proxy, but Studio talks to the server directly.
@@ -163,7 +164,7 @@ class TestLanggraphConfig:
         assert "https://smith.langchain.com" in cors["allow_origins"]
 
     def test_emitted_keys_are_all_owned(self):
-        for s in (spec(), AgentSpec(name="x-y", runtime="node")):
+        for s in (spec(), AgentSpec(name="x-y", runtime="typescript")):
             assert set(s.to_langgraph_config()) <= AgentSpec.owned_keys()
 
 

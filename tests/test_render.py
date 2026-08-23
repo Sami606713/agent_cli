@@ -144,6 +144,95 @@ class TestConfigMerge:
         assert config_drift(spec, spec.to_langgraph_config()) == {}
 
 
+def ts_spec(**overrides) -> AgentSpec:
+    overrides.setdefault("frontend", {"enabled": False, "kind": "none"})
+    return AgentSpec(name="demo-agent", runtime="typescript", **overrides)
+
+
+class TestTypescriptScaffold:
+    """Parity checks for the typescript runtime, mirroring TestScaffold above."""
+
+    def test_project_has_the_expected_shape(self, tmp_path):
+        spec = ts_spec()
+        scaffold(spec, tmp_path)
+        for rel in (
+            "agent.yaml",
+            "langgraph.json",
+            "package.json",
+            "tsconfig.json",
+            ".env.example",
+            ".gitignore",
+            "src/agent.ts",
+            "src/config.ts",
+            "src/memory/checkpointer.ts",
+            "src/memory/store.ts",
+            "src/middleware/index.ts",
+            "src/middleware/custom/index.ts",
+            "src/prompts/index.ts",
+            "src/prompts/system.ts",
+            "src/tools/index.ts",
+            "src/tools/builtin.ts",
+            "src/tools/memory.ts",
+            "tests/agent.test.ts",
+        ):
+            assert (tmp_path / rel).is_file(), f"missing {rel}"
+
+    def test_no_unrendered_jinja_left_in_output(self, tmp_path):
+        spec = ts_spec()
+        scaffold(spec, tmp_path)
+        for path in tmp_path.rglob("*"):
+            if not path.is_file():
+                continue
+            text = path.read_text(encoding="utf-8", errors="ignore")
+            assert "{%" not in text, f"unrendered jinja block in {path}"
+            assert "{{ " not in text, f"unrendered jinja expression in {path}"
+
+    def test_package_json_has_valid_json_and_core_deps(self, tmp_path):
+        import json
+
+        spec = ts_spec()
+        scaffold(spec, tmp_path)
+        data = json.loads((tmp_path / "package.json").read_text())
+        assert data["name"] == "demo-agent"
+        assert data["type"] == "module"
+        deps = data["dependencies"]
+        assert "langchain" in deps
+        assert "@langchain/langgraph" in deps
+        # The default provider (anthropic) must fan out to its npm package,
+        # same as the Python side fans out to langchain-anthropic.
+        assert "@langchain/anthropic" in deps
+        assert "@langchain/langgraph-cli" in data["devDependencies"]
+
+    def test_langgraph_config_points_at_agent_ts(self, tmp_path):
+        spec = ts_spec()
+        scaffold(spec, tmp_path)
+        import json
+
+        cfg = json.loads((tmp_path / "langgraph.json").read_text())
+        assert cfg["graphs"] == {"agent": "./src/agent.ts:graph"}
+        assert cfg["node_version"] == "20"
+
+    def test_semantic_search_is_rejected(self):
+        import pytest as _pytest
+        from pydantic import ValidationError
+
+        with _pytest.raises(ValidationError, match="typescript"):
+            AgentSpec(
+                name="demo-agent",
+                runtime="typescript",
+                memory={"long_term": {"semantic_search": True}},
+            )
+
+    def test_sqlite_long_term_falls_back_to_in_memory_store_honestly(self, tmp_path):
+        # There is no documented JS long-term store for sqlite; the template
+        # must say so rather than silently pretending to be durable.
+        spec = ts_spec()
+        scaffold(spec, tmp_path)
+        store = (tmp_path / "src/memory/store.ts").read_text()
+        assert "InMemoryStore" in store
+        assert "not durable" in store
+
+
 class TestBackendImportability:
     """Regression guards for two failures found only by running the real server."""
 

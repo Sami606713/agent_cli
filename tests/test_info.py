@@ -80,3 +80,14 @@ class TestInfo:
         result = runner.invoke(cli, ["info"])
         assert result.exit_code == 0
         assert "rate_limit" in result.output
+
+
+class TestTypescriptRuntime:
+    """`info` must handle a typescript-runtime project without crashing."""
+
+    def test_shows_typescript_runtime(self, tmp_path, monkeypatch):
+        scaffolded(tmp_path, runtime="typescript", frontend={"enabled": False, "kind": "none"})
+        monkeypatch.chdir(tmp_path)
+        result = runner.invoke(cli, ["info"])
+        assert result.exit_code == 0
+        assert "demo-agent" in result.output

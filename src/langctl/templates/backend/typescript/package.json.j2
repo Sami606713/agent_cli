@@ -1,0 +1,24 @@
+{
+  "name": "{{ name }}",
+  "version": "0.1.0",
+  "description": "{{ name }} — a LangChain agent",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+{% for package, version in npm_packages.items() %}
+    "{{ package }}": "{{ version }}"{{ "," if not loop.last }}
+{% endfor %}
+  },
+  "devDependencies": {
+    "@langchain/langgraph-cli": "^1.0.0",
+    "typescript": "^5.6.0",
+    "vitest": "^2.1.0"
+  }
+}

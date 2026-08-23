@@ -35,7 +35,7 @@ def _resolve_port(preferred: int, role: str, auto: bool) -> int:
 def _backend_command(project: Project, port: int, docker: bool, tunnel: bool) -> list[str]:
     # Prefers the project's own venv: `langgraph dev` imports the graph in-process,
     # so it has to run where the agent's dependencies are installed.
-    langgraph = find_langgraph(project.root)
+    langgraph = find_langgraph(project.root, project.spec.runtime)
     if docker:
         # `up` takes its port from its own compose config, not a flag.
         return up_command(langgraph, project.langgraph_config_path)
